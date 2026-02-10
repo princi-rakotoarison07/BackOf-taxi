@@ -31,7 +31,4 @@ CREATE TABLE reservation (
 CREATE SEQUENCE seq_hotel;
 CREATE SEQUENCE seq_reservation;
 
-INSERT INTO hotel (id_hotel, nom_hotel) VALUES 
-('HOT0001', 'Hilton Madagascar'),
-('HOT0002', 'Carlton Anosy'),
-('HOT0003', 'Radisson Blu');
+
