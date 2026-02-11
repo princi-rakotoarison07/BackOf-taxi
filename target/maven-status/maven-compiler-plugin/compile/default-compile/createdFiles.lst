@@ -1,5 +1,5 @@
+com\taxi\controller\ReservationController.class
+com\taxi\util\DBConnection.class
 com\taxi\model\Reservation.class
 com\taxi\model\Hotel.class
-com\taxi\controller\ReservationController.class
 com\taxi\controller\HotelController.class
-com\taxi\util\DBConnection.class
