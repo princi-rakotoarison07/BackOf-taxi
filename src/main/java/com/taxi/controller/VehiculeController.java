@@ -23,9 +23,21 @@ public class VehiculeController {
         }
     }
 
+    @GetMapping("/vehicule/list")
+    public ModelAndView list() throws Exception {
+        ModelAndView mv = new ModelAndView("/views/vehicule/list.jsp");
+        try (Connection conn = DBConnection.getConnection()) {
+            List<Vehicule> vehicules = Vehicule.getAll(Vehicule.class, conn);
+            List<TypeCarburant> types = TypeCarburant.getAll(TypeCarburant.class, conn);
+            mv.addObject("vehicules", vehicules);
+            mv.addObject("types", types);
+        }
+        return mv;
+    }
+
     @GetMapping("/vehicule/form")
     public ModelAndView showForm() throws Exception {
-        ModelAndView mv = new ModelAndView("/views/vehiculeForm.jsp");
+        ModelAndView mv = new ModelAndView("/views/vehicule/form.jsp");
         try (Connection conn = DBConnection.getConnection()) {
             List<TypeCarburant> types = TypeCarburant.getAll(TypeCarburant.class, conn);
             mv.addObject("types", types);
@@ -35,13 +47,22 @@ public class VehiculeController {
 
     @PostMapping("/vehicule/save")
     public ModelAndView save(@ModelAttribute Vehicule vehicule) {
-        ModelAndView mv = new ModelAndView("/views/result.jsp");
+        ModelAndView mv = new ModelAndView("/views/vehicule/form.jsp");
         try (Connection conn = DBConnection.getConnection()) {
             vehicule.insert(conn);
-            mv.addObject("message", "Véhicule enregistré avec succès ! ID: " + vehicule.getIdVehicule());
+            mv.addObject("successMessage", "Véhicule enregistré avec succès ! ID: " + vehicule.getIdVehicule());
+
+            // Re-charger les types pour le formulaire
+            List<TypeCarburant> types = TypeCarburant.getAll(TypeCarburant.class, conn);
+            mv.addObject("types", types);
         } catch (Exception e) {
             e.printStackTrace();
-            mv.addObject("error", "Erreur lors de l'enregistrement du véhicule : " + e.getMessage());
+            mv.addObject("errorMessage", "Erreur lors de l'enregistrement du véhicule : " + e.getMessage());
+            try (Connection conn = DBConnection.getConnection()) {
+                List<TypeCarburant> types = TypeCarburant.getAll(TypeCarburant.class, conn);
+                mv.addObject("types", types);
+            } catch (Exception ignored) {
+            }
         }
         return mv;
     }

@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BackOffice Taxi - <%= request.getAttribute("pageTitle") != null ? request.getAttribute("pageTitle") : "Admin" %></title>
+    <title>inDrive - <%= request.getAttribute("pageTitle") != null ? request.getAttribute("pageTitle") : "Admin" %></title>
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome -->
@@ -13,66 +13,81 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --sidebar-width: 260px;
-            --primary-color: #4e73df;
-            --secondary-color: #858796;
-            --dark-bg: #1a1c23;
-            --light-bg: #f8f9fc;
+            --sidebar-width: 280px;
+            --primary-color: #6366f1;
+            --primary-hover: #4f46e5;
+            --secondary-color: #94a3b8;
+            --dark-bg: #0f172a;
+            --light-bg: #f8fafc;
+            --sidebar-active-bg: rgba(99, 102, 241, 0.1);
+            --card-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --card-shadow-hover: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
         }
 
         body {
             font-family: 'Inter', sans-serif;
             background-color: var(--light-bg);
+            color: #1e293b;
             overflow-x: hidden;
         }
 
-        /* Sidebar */
+        /* Sidebar Improvement */
         #sidebar {
             width: var(--sidebar-width);
             height: 100vh;
             position: fixed;
             top: 0;
             left: 0;
-            background: var(--dark-bg);
-            color: #fff;
-            transition: all 0.3s;
+            background: #fff;
+            color: #1e293b;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
             z-index: 1000;
+            border-right: 1px solid #e2e8f0;
         }
 
         #sidebar .sidebar-header {
-            padding: 20px;
-            background: rgba(0,0,0,0.1);
-            border-bottom: 1px solid rgba(255,255,255,0.05);
+            padding: 24px;
+            background: #fff;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #f1f5f9;
         }
 
         #sidebar .nav-link {
-            padding: 12px 20px;
-            color: rgba(255,255,255,0.7);
+            padding: 12px 24px;
+            margin: 4px 16px;
+            color: #64748b;
             display: flex;
             align-items: center;
-            border-left: 4px solid transparent;
-            transition: all 0.2s;
+            border-radius: 12px;
+            transition: all 0.3s;
+            font-weight: 500;
         }
 
-        #sidebar .nav-link:hover, #sidebar .nav-link.active {
+        #sidebar .nav-link:hover {
+            color: var(--primary-color);
+            background: var(--sidebar-active-bg);
+            transform: translateX(4px);
+        }
+
+        #sidebar .nav-link.active {
             color: #fff;
-            background: rgba(255,255,255,0.05);
-            border-left-color: var(--primary-color);
+            background: var(--primary-color);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
         }
 
         #sidebar .nav-link i {
-            width: 20px;
+            width: 24px;
             margin-right: 12px;
-            font-size: 1.1rem;
+            font-size: 1.25rem;
         }
 
         #sidebar .category-title {
-            padding: 20px 20px 10px;
-            font-size: 0.75rem;
+            padding: 24px 24px 8px;
+            font-size: 0.7rem;
             text-transform: uppercase;
-            font-weight: 700;
-            color: rgba(255,255,255,0.4);
-            letter-spacing: 1px;
+            font-weight: 800;
+            color: #94a3b8;
+            letter-spacing: 1.5px;
         }
 
         /* Main Content */
@@ -80,15 +95,16 @@
             margin-left: var(--sidebar-width);
             width: calc(100% - var(--sidebar-width));
             min-height: 100vh;
-            transition: all 0.3s;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        /* Header */
+        /* Header / Topbar */
         .topbar {
-            height: 70px;
-            background: #fff;
-            box-shadow: 0 .15rem 1.75rem 0 rgba(58,59,69,.15);
-            padding: 0 30px;
+            height: 80px;
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid #e2e8f0;
+            padding: 0 40px;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -97,77 +113,167 @@
             z-index: 900;
         }
 
-        .breadcrumb-item + .breadcrumb-item::before {
-            content: "\f105";
-            font-family: "Font Awesome 6 Free";
-            font-weight: 900;
-            font-size: 0.8rem;
-        }
-
-        /* Cards & Forms */
+        /* Modern Cards */
         .card {
             border: none;
-            border-radius: 0.75rem;
-            box-shadow: 0 .15rem 1.75rem 0 rgba(58,59,69,.1);
+            border-radius: 16px;
+            background: #fff;
+            box-shadow: var(--card-shadow);
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            box-shadow: var(--card-shadow-hover);
         }
 
         .card-header {
             background-color: #fff;
-            border-bottom: 1px solid #e3e6f0;
-            padding: 1.25rem;
-            font-weight: 700;
-            color: var(--primary-color);
+            border-bottom: 1px solid #f1f5f9;
+            padding: 20px 24px;
+            border-radius: 16px 16px 0 0 !important;
         }
 
+        .card-header h5 {
+            font-weight: 700;
+            color: #1e293b;
+            font-size: 1.1rem;
+        }
+
+        /* Forms Styling */
         .form-label {
             font-weight: 600;
-            color: #4e73df;
-            font-size: 0.9rem;
+            color: #475569;
+            font-size: 0.85rem;
+            margin-bottom: 8px;
         }
 
         .form-control, .form-select {
-            padding: 0.75rem 1rem;
-            border-radius: 0.5rem;
-            border: 1px solid #d1d3e2;
+            padding: 12px 16px;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            background-color: #f8fafc;
+            transition: all 0.2s;
+            font-size: 0.95rem;
         }
 
         .form-control:focus, .form-select:focus {
-            box-shadow: 0 0 0 0.25rem rgba(78, 115, 223, 0.25);
-            border-color: #bac8f3;
+            background-color: #fff;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+            outline: none;
+        }
+
+        .input-group-text {
+            border-radius: 12px 0 0 12px;
+            border: 1px solid #e2e8f0;
+            background-color: #f1f5f9;
+            color: #64748b;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 10px 24px;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: all 0.3s;
         }
 
         .btn-primary {
             background-color: var(--primary-color);
             border: none;
-            padding: 0.75rem 1.5rem;
-            border-radius: 0.5rem;
-            font-weight: 600;
-            transition: all 0.3s;
+            box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.2);
         }
 
         .btn-primary:hover {
-            background-color: #2e59d9;
-            transform: translateY(-1px);
-            box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15);
+            background-color: var(--primary-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.3);
         }
 
-        /* Stats Card */
+        /* Stats Cards Improvement */
         .stats-card {
-            border-left: 0.25rem solid var(--primary-color);
+            border-left: 0;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid #f1f5f9;
+        }
+
+        .stats-card .card-body {
+            padding: 1.5rem;
         }
 
         .stats-title {
-            font-size: 0.7rem;
-            font-weight: 700;
-            color: var(--primary-color);
-            text-transform: uppercase;
-            margin-bottom: 0.25rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #64748b;
+            text-transform: none;
+            letter-spacing: normal;
+            margin-bottom: 0.5rem;
         }
 
         .stats-value {
+            font-size: 1.75rem;
+            font-weight: 800;
+            color: #0f172a;
+            line-height: 1;
+        }
+
+        .stats-icon-wrapper {
+            width: 56px;
+            height: 56px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover .stats-icon-wrapper {
+            transform: scale(1.1) rotate(-5deg);
+        }
+
+        .bg-gradient-primary {
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+            color: white;
+        }
+
+        .bg-gradient-success {
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            color: white;
+        }
+
+        .bg-gradient-info {
+            background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+            color: white;
+        }
+
+        .badge {
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+
+        /* Utility Classes */
+        .bg-indigo-soft { background-color: rgba(99, 102, 241, 0.1); }
+        .bg-primary-soft { background-color: rgba(99, 102, 241, 0.1); }
+        .bg-success-soft { background-color: rgba(34, 197, 94, 0.1); }
+        .bg-warning-soft { background-color: rgba(245, 158, 11, 0.1); }
+        .bg-danger-soft { background-color: rgba(239, 68, 68, 0.1); }
+        
+        .text-indigo { color: #6366f1; }
+        .text-success { color: #22c55e !important; }
+        
+        .icon-circle {
+            height: 48px;
+            width: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+        }
+
+        .icon-circle i {
             font-size: 1.25rem;
-            font-weight: 700;
-            color: #5a5c69;
         }
 
         @media (max-width: 992px) {
@@ -181,6 +287,9 @@
                 margin-left: 0;
                 width: 100%;
             }
+            .topbar {
+                padding: 0 20px;
+            }
         }
     </style>
 </head>
@@ -189,16 +298,19 @@
     <!-- Sidebar -->
     <nav id="sidebar">
         <div class="sidebar-header">
-            <h4 class="m-0"><i class="fas fa-taxi me-2 text-primary"></i>Taxi Admin</h4>
+            <h4 class="m-0 fw-bold"><i class="fas fa-taxi me-2 text-primary"></i>inDrive</h4>
         </div>
         
         <div class="category-title">Principal</div>
         <a href="${pageContext.request.contextPath}/reservation/form" class="nav-link <%= request.getRequestURI().contains("reservation") ? "active" : "" %>">
             <i class="fas fa-calendar-check"></i> Réservations
         </a>
-        <a href="${pageContext.request.contextPath}/vehicule/form" class="nav-link <%= request.getRequestURI().contains("vehicule") ? "active" : "" %>">
-            <i class="fas fa-car"></i> Véhicules
+        <a href="${pageContext.request.contextPath}/vehicule/list" class="nav-link <%= request.getRequestURI().contains("vehicule/list") ? "active" : "" %>">
+            <i class="fas fa-list"></i> Liste Véhicules
         </a>
+        <a href="${pageContext.request.contextPath}/vehicule/form" class="nav-link <%= request.getRequestURI().contains("vehicule/form") || request.getServletPath().contains("vehicule/form.jsp") ? "active" : "" %>">
+             <i class="fas fa-plus-circle"></i> Ajouter Véhicule
+         </a>
 
         <div class="category-title">Données & APIs</div>
         <a href="${pageContext.request.contextPath}/api/reservations" target="_blank" class="nav-link">
