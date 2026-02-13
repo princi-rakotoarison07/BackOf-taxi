@@ -239,8 +239,6 @@ Le framework propose une couche de persistance simplifiée de type ORM pour auto
 - `@Table(name = "nom_table")` : (Optionnel) Définit le nom de la table en base. Par défaut, utilise le nom de la classe.
 - `@Column(name = "nom_colonne")` : (Optionnel) Définit le nom de la colonne. Par défaut, utilise le nom du champ.
 
-> **Important** : Pour les colonnes auto-incrémentées (comme `SERIAL` en PostgreSQL), ne mettez pas l'annotation `@Column`. Cela permettra au framework d'ignorer ces champs lors de l'insertion et de laisser la base de données générer la valeur.
-
 ### 2. Utilisation du modèle
 Pour bénéficier de l'insertion automatique, vos classes de domaine doivent hériter de la classe `framework.utilitaire.Model`.
 
@@ -264,45 +262,6 @@ Il suffit d'appeler la méthode `.insert(Connection conn)` sur votre objet.
 public void sauvegarder(Employe emp, Connection conn) throws Exception {
     emp.insert(conn); 
     // Génère automatiquement : INSERT INTO employes (nom, age) VALUES (?, ?)
-}
-```
-
-### 4. Exemple d'intégration avec Spring Boot
-Bien que le framework soit autonome, il peut être utilisé au sein d'un projet Spring Boot pour sa couche ORM simplifiée.
-
-#### Insertion de données
-```java
-@PostMapping("/save")
-@ResponseBody
-public Map<String, Object> save(@ModelAttribute MonModele obj) {
-    try (Connection conn = dataSource.getConnection()) {
-        obj.insert(conn); // Utilisation de l'ORM du framework
-        return Map.of("status", "success");
-    } catch (Exception e) {
-        return Map.of("status", "error", "message", e.getMessage());
-    }
-}
-```
-
-#### Liste des données (API JSON)
-Pour retourner une liste d'objets au format JSON :
-```java
-@GetMapping("/reservation")
-@ResponseBody
-public List<Reservation> listReservations() {
-    List<Reservation> reservations = new ArrayList<>();
-    try (Connection conn = dataSource.getConnection();
-         Statement stmt = conn.createStatement();
-         ResultSet rs = stmt.executeQuery("SELECT * FROM reservation")) {
-        while (rs.next()) {
-            Reservation r = new Reservation();
-            // Mapping manuel (ou via réflexion utilisant les annotations @Column du framework)
-            r.setIdReservation(rs.getInt("id_reservation"));
-            // ...
-            reservations.add(r);
-        }
-    } catch (Exception e) { e.printStackTrace(); }
-    return reservations;
 }
 ```
 

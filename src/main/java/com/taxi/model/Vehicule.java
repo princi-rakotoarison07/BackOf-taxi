@@ -1,6 +1,7 @@
 package com.taxi.model;
 
 import framework.annotation.Column;
+import framework.annotation.Id;
 import framework.annotation.Table;
 import framework.utilitaire.Model;
 import java.sql.Connection;
@@ -9,6 +10,7 @@ import java.sql.Statement;
 
 @Table(name = "vehicule")
 public class Vehicule extends Model {
+    @Id
     @Column(name = "id_vehicule")
     private String idVehicule;
 
@@ -21,19 +23,40 @@ public class Vehicule extends Model {
     @Column(name = "id_type_carburant")
     private String idTypeCarburant;
 
-    public Vehicule() {}
+    public Vehicule() {
+    }
 
-    public String getIdVehicule() { return idVehicule; }
-    public void setIdVehicule(String idVehicule) { this.idVehicule = idVehicule; }
+    public String getIdVehicule() {
+        return idVehicule;
+    }
 
-    public String getReference() { return reference; }
-    public void setReference(String reference) { this.reference = reference; }
+    public void setIdVehicule(String idVehicule) {
+        this.idVehicule = idVehicule;
+    }
 
-    public Integer getNbrPlace() { return nbrPlace; }
-    public void setNbrPlace(Integer nbrPlace) { this.nbrPlace = nbrPlace; }
+    public String getReference() {
+        return reference;
+    }
 
-    public String getIdTypeCarburant() { return idTypeCarburant; }
-    public void setIdTypeCarburant(String idTypeCarburant) { this.idTypeCarburant = idTypeCarburant; }
+    public void setReference(String reference) {
+        this.reference = reference;
+    }
+
+    public Integer getNbrPlace() {
+        return nbrPlace;
+    }
+
+    public void setNbrPlace(Integer nbrPlace) {
+        this.nbrPlace = nbrPlace;
+    }
+
+    public String getIdTypeCarburant() {
+        return idTypeCarburant;
+    }
+
+    public void setIdTypeCarburant(String idTypeCarburant) {
+        this.idTypeCarburant = idTypeCarburant;
+    }
 
     @Override
     public void insert(Connection conn) throws Exception {
@@ -46,7 +69,7 @@ public class Vehicule extends Model {
     private String generateId(Connection conn) throws Exception {
         String sql = "SELECT nextval('seq_vehicule')";
         try (Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
+                ResultSet rs = stmt.executeQuery(sql)) {
             if (rs.next()) {
                 long val = rs.getLong(1);
                 return String.format("VEH%04d", val);

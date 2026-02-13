@@ -232,13 +232,18 @@ public class FrontServlet extends HttpServlet {
 
             if (result instanceof ModelAndView) {
                 ModelAndView mv = (ModelAndView) result;
-                // Set model attributes
-                for (Map.Entry<String, Object> entry : mv.getModel().entrySet()) {
-                    req.setAttribute(entry.getKey(), entry.getValue());
+                if (mv.isRedirect()) {
+                    String redirectUrl = req.getContextPath() + mv.getView();
+                    resp.sendRedirect(redirectUrl);
+                } else {
+                    // Set model attributes
+                    for (Map.Entry<String, Object> entry : mv.getModel().entrySet()) {
+                        req.setAttribute(entry.getKey(), entry.getValue());
+                    }
+                    // Forward to JSP view
+                    RequestDispatcher dispatcher = req.getRequestDispatcher(mv.getView());
+                    dispatcher.forward(req, resp);
                 }
-                // Forward to JSP view
-                RequestDispatcher dispatcher = req.getRequestDispatcher(mv.getView());
-                dispatcher.forward(req, resp);
             } else if (isRest) {
                 // Serialize to JSON
                 resp.setContentType("application/json;charset=UTF-8");

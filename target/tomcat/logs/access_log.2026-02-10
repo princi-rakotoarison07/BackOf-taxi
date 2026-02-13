@@ -1,2 +1,0 @@
-0:0:0:0:0:0:0:1 - - [10/Feb/2026:17:10:49 +0300] "GET /kolotv HTTP/1.1" 404 - http-bio-8080-exec-1 0
-0:0:0:0:0:0:0:1 - - [10/Feb/2026:17:11:02 +0300] "GET /BackOf-taxi/reservation/form HTTP/1.1" 500 4838 http-bio-8080-exec-2 12

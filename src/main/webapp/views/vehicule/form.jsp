@@ -1,8 +1,19 @@
 <%@ page contentType="text/html;charset=UTF-8" language="java" %>
 <%@ page import="java.util.List" %>
 <%@ page import="com.taxi.model.TypeCarburant" %>
+<%@ page import="com.taxi.model.Vehicule" %>
 <% request.setAttribute("pageTitle", "Gestion des Véhicules"); %>
 <jsp:include page="../layout/header.jsp" />
+
+<%
+    Vehicule vehicule = (Vehicule) request.getAttribute("vehicule");
+    boolean isEdit = (vehicule != null);
+    String formAction = isEdit ? "/vehicule/update" : "/vehicule/save";
+    String pageHeader = isEdit ? "Modifier le véhicule" : "Nouveau véhicule";
+    String submitText = isEdit ? "Mettre à jour" : "Ajouter le véhicule";
+    String badgeText = isEdit ? "Modification" : "Enregistrement";
+    String submitIcon = isEdit ? "fa-save" : "fa-plus-circle";
+%>
 
 <div class="container-fluid">
     <% if (request.getAttribute("successMessage") != null) { %>
@@ -60,18 +71,23 @@
             <div class="card mb-4">
                 <div class="card-header d-flex align-items-center justify-content-between">
                     <h5 class="m-0">
-                        <i class="fas fa-car-side me-2 text-primary"></i>Nouveau véhicule
+                        <i class="fas fa-car-side me-2 text-primary"></i><%= pageHeader %>
                     </h5>
-                    <span class="badge bg-primary-soft text-primary">Enregistrement</span>
+                    <span class="badge bg-primary-soft text-primary"><%= badgeText %></span>
                 </div>
                 <div class="card-body p-4">
-                    <form action="${pageContext.request.contextPath}/vehicule/save" method="post">
+                    <form action="${pageContext.request.contextPath}<%= formAction %>" method="post">
+                        <% if (isEdit) { %>
+                            <input type="hidden" name="idVehicule" value="<%= vehicule.getIdVehicule() %>">
+                        <% } %>
                         <div class="row g-4 mb-4">
                             <div class="col-md-4">
                                 <label for="reference" class="form-label">Référence</label>
                                 <div class="input-group">
                                     <span class="input-group-text"><i class="fas fa-tag"></i></span>
-                                    <input type="text" id="reference" name="reference" class="form-control" placeholder="Ex: VEH-001" required>
+                                    <input type="text" id="reference" name="reference" class="form-control" 
+                                           placeholder="Ex: VEH-001" required
+                                           value="<%= isEdit ? vehicule.getReference() : "" %>">
                                 </div>
                                 <div class="form-text mt-2">Identifiant unique du véhicule.</div>
                             </div>
@@ -79,7 +95,9 @@
                                 <label for="nbrPlace" class="form-label">Capacité</label>
                                 <div class="input-group">
                                     <span class="input-group-text"><i class="fas fa-users"></i></span>
-                                    <input type="number" id="nbrPlace" name="nbrPlace" class="form-control" min="1" placeholder="Nombre de places" required>
+                                    <input type="number" id="nbrPlace" name="nbrPlace" class="form-control" 
+                                           min="1" placeholder="Nombre de places" required
+                                           value="<%= isEdit ? vehicule.getNbrPlace() : "" %>">
                                 </div>
                             </div>
                             <div class="col-md-4">
@@ -92,8 +110,9 @@
                                             List<TypeCarburant> types = (List<TypeCarburant>) request.getAttribute("types");
                                             if (types != null) {
                                                 for (TypeCarburant t : types) {
+                                                    String selected = (isEdit && t.getIdTypeCarburant().equals(vehicule.getIdTypeCarburant())) ? "selected" : "";
                                         %>
-                                            <option value="<%= t.getIdTypeCarburant() %>"><%= t.getLibelle() %> (<%= t.getCode() %>)</option>
+                                            <option value="<%= t.getIdTypeCarburant() %>" <%= selected %>><%= t.getLibelle() %> (<%= t.getCode() %>)</option>
                                         <% 
                                                 }
                                             } 
@@ -108,7 +127,7 @@
                                 <i class="fas fa-arrow-left me-2"></i>Retour à la liste
                             </a>
                             <button type="submit" class="btn btn-primary px-5">
-                                <i class="fas fa-plus-circle me-2"></i>Ajouter le véhicule
+                                <i class="fas <%= submitIcon %> me-2"></i><%= submitText %>
                             </button>
                         </div>
                     </form>

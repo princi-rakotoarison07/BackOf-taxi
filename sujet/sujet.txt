@@ -29,6 +29,7 @@ TABLE distance (id, from, to , kilometre)
 
 BackOF : page mampiditra date - > liste vehicule sy ny resa assigne amle 
 vehicule , amfiry miainga ao de amin firy no tafaverina ao 
+page liste resa non assigne dans une date
 
 regle de gestion : tsy maintsy manana capacite mihaotra ny nb passager no afaka 
  hi assignena anle resa , raha misy maro de ze akaiky no assignena aminy 

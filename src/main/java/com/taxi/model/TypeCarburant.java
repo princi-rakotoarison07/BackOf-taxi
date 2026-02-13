@@ -1,11 +1,13 @@
 package com.taxi.model;
 
 import framework.annotation.Column;
+import framework.annotation.Id;
 import framework.annotation.Table;
 import framework.utilitaire.Model;
 
 @Table(name = "type_carburant")
 public class TypeCarburant extends Model {
+    @Id
     @Column(name = "id_type_carburant")
     private String idTypeCarburant;
 
@@ -15,14 +17,30 @@ public class TypeCarburant extends Model {
     @Column(name = "libelle")
     private String libelle;
 
-    public TypeCarburant() {}
+    public TypeCarburant() {
+    }
 
-    public String getIdTypeCarburant() { return idTypeCarburant; }
-    public void setIdTypeCarburant(String idTypeCarburant) { this.idTypeCarburant = idTypeCarburant; }
+    public String getIdTypeCarburant() {
+        return idTypeCarburant;
+    }
 
-    public String getCode() { return code; }
-    public void setCode(String code) { this.code = code; }
+    public void setIdTypeCarburant(String idTypeCarburant) {
+        this.idTypeCarburant = idTypeCarburant;
+    }
 
-    public String getLibelle() { return libelle; }
-    public void setLibelle(String libelle) { this.libelle = libelle; }
+    public String getCode() {
+        return code;
+    }
+
+    public void setCode(String code) {
+        this.code = code;
+    }
+
+    public String getLibelle() {
+        return libelle;
+    }
+
+    public void setLibelle(String libelle) {
+        this.libelle = libelle;
+    }
 }

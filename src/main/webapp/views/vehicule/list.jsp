@@ -100,12 +100,15 @@
                             </td>
                             <td class="text-end pe-4">
                                 <div class="btn-group">
-                                    <button class="btn btn-sm btn-light-primary me-2" title="Modifier">
+                                    <a href="${pageContext.request.contextPath}/vehicule/edit?id=<%= v.getIdVehicule() %>" class="btn btn-sm btn-light-primary me-2" title="Modifier">
                                         <i class="fas fa-edit"></i>
-                                    </button>
-                                    <button class="btn btn-sm btn-light-danger" title="Supprimer">
+                                    </a>
+                                    <a href="${pageContext.request.contextPath}/vehicule/delete?id=<%= v.getIdVehicule() %>" 
+                                       class="btn btn-sm btn-light-danger" 
+                                       title="Supprimer"
+                                       onclick="return confirm('Êtes-vous sûr de vouloir supprimer ce véhicule ?')">
                                         <i class="fas fa-trash"></i>
-                                    </button>
+                                    </a>
                                 </div>
                             </td>
                         </tr>
