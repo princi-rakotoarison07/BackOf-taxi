@@ -1,0 +1,82 @@
+TODO LIST – Framework MVC (Annotations & Routing)
+
+Sprint 2 (bis) – Scan des controllers
+- Retourner la liste des classes annotées @Controller dans un package donné.
+- Seules les classes contenant l’annotation @Controller doivent être prises en compte.
+
+Exemple :
+com.package.controller
+ - Test1.java (@Controller)
+ - Test2.java
+
+Résultat attendu : Test1.java
+
+
+Sprint 3 – Méthodes d’un controller par URL
+- À partir d’une URL (ex : /monApp/login), retourner les méthodes du controller correspondant.
+
+Exemple :
+URL : /monApp/login
+Méthode : getUser()
+
+
+Sprint 4 – Exécution d’une méthode via l’URL
+- Exécuter automatiquement la méthode associée à l’URL.
+- Le résultat retourné par la méthode est affiché dans la réponse.
+
+Exemple :
+String getUser() {
+    return "user est ici";
+}
+
+Accès à /login
+Résultat : user est ici
+
+
+Sprint 4 (bis) – Affichage d’une page JSP
+- Associer une URL à une page JSP via un controller.
+
+Exemple :
+URL : /register
+Affiche : register.jsp
+
+
+Sprint 5 – Gestion du département (ModelAndView)
+- Créer la classe entité Departement.
+- URL /departement :
+  - Exécuter une méthode du controller
+  - Retourner un ModelAndView
+  - Contenir les données de departement()
+  - Afficher la page departement.jsp avec la liste des départements
+
+
+Sprint 6 – Paramètres et variables d’URL
+- Les données envoyées doivent correspondre aux données récupérées.
+- Support des paramètres via annotation.
+- Récupération des variables dans l’URL.
+
+Exemple :
+/departement/{id}
+
+
+Sprint 7 – Gestion GET et POST
+- Différencier les requêtes :
+  - GET /url1
+  - POST /url1
+- Utilisation de GetMapping et PostMapping.
+
+
+Sprint 8 – Paramètres dynamiques avec Map
+- Si une méthode de controller reçoit :
+  Map<String, Object> params
+- Récupérer automatiquement tous les paramètres via request.getParameterMap().
+- Injecter les paramètres dans un objet / entité.
+
+Objectif :
+Créer automatiquement un objet métier à partir du Map<String, Object).
+
+
+Sprint 11 – Gestion de session
+- Implémenter la session sous forme :
+  Map<String, Object>
+- Stocker et récupérer les données utilisateur depuis la session.
