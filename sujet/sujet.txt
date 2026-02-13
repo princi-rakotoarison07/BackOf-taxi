@@ -18,6 +18,7 @@ Protege api:
 -Creer table token (id_token,ref,dateHeure_expiration)
 Appele api mandefa token
 
+------SPRINT 3 --------
 
 -INSERTION  PARAMETRE ( CRUD✖ )
 vitesse moyennne , temps d'attente
@@ -25,4 +26,13 @@ vitesse moyennne , temps d'attente
 ALTER HOTEL: idlieu_hotel
 TABLE distance (id, from, to , kilometre)
 
-BackOffice: insert Date -->liste vehicule sy ny reservation assigne amle vehibule , amfiry miainga ao de amfiry no tafaverina ao  
+
+BackOF : page mampiditra date - > liste vehicule sy ny resa assigne amle 
+vehicule , amfiry miainga ao de amin firy no tafaverina ao 
+
+regle de gestion : tsy maintsy manana capacite mihaotra ny nb passager no afaka 
+ hi assignena anle resa , raha misy maro de ze akaiky no assignena aminy 
+ de raha misy maro ohatra ny 11plc , de ze diesel no hi assignena azy (Diesel priorite par rapport amin essence)
+ 
+
+ traitena ny resa  : mitady vehicule antonona azy 
