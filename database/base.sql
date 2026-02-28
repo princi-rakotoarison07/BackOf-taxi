@@ -3,14 +3,55 @@
 -- Suppression des tables si elles existent
 DROP TABLE IF EXISTS reservation CASCADE;
 DROP TABLE IF EXISTS hotel CASCADE;
+DROP TABLE IF EXISTS lieuhotel CASCADE;
+DROP TABLE IF EXISTS parametre CASCADE;
+DROP TABLE IF EXISTS distance CASCADE;
 
 -- Suppression des séquences si elles existent
 DROP SEQUENCE IF EXISTS seq_hotel;
 DROP SEQUENCE IF EXISTS seq_reservation;
 
+
+CREATE TABLE lieuhotel (
+    id_lieu VARCHAR(50) PRIMARY KEY,
+    nom_lieu VARCHAR(150) NOT NULL,
+    ville VARCHAR(100) NOT NULL
+);
 CREATE TABLE hotel (
     id_hotel VARCHAR(50) PRIMARY KEY,
-    nom_hotel VARCHAR(150) NOT NULL
+    nom_hotel VARCHAR(150) NOT NULL,
+    id_lieu VARCHAR(50),
+    
+    CONSTRAINT fk_hotel_lieu
+        FOREIGN KEY (id_lieu)
+        REFERENCES lieuhotel(id_lieu)
+        ON UPDATE CASCADE
+        ON DELETE SET NULL
+);
+
+CREATE TABLE parametre (
+    id_parametre VARCHAR(50) PRIMARY KEY,
+    vitesse_moyenne DECIMAL(5,2) NOT NULL,  -- en km/h
+    temps_attente INTEGER NOT NULL          -- en minutes
+);
+
+CREATE TABLE distance (
+    id_distance VARCHAR(50) PRIMARY KEY,
+    lieu_from VARCHAR(50) NOT NULL,
+    lieu_to VARCHAR(50) NOT NULL,
+    kilometre DECIMAL(8,2) NOT NULL CHECK (kilometre > 0),
+    
+    CONSTRAINT fk_distance_lieu_from
+        FOREIGN KEY (lieu_from)
+        REFERENCES lieuhotel(id_lieu)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+        
+    CONSTRAINT fk_distance_lieu_to
+        FOREIGN KEY (lieu_to)
+        REFERENCES lieuhotel(id_lieu)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
 );
 
 CREATE TABLE reservation (

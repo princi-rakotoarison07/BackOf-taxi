@@ -1,3 +1,5 @@
+com\taxi\model\Parametre.class
+com\taxi\controller\ParametreController.class
 com\taxi\controller\ReservationController.class
 com\taxi\util\DBConnection.class
 com\taxi\model\Reservation.class

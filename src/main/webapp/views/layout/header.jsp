@@ -312,6 +312,11 @@
              <i class="fas fa-plus-circle"></i> Ajouter Véhicule
          </a>
 
+        <div class="category-title">Configuration</div>
+        <a href="${pageContext.request.contextPath}/parametre/form" class="nav-link <%= request.getRequestURI().contains("parametre") ? "active" : "" %>">
+            <i class="fas fa-cogs"></i> Paramètres
+        </a>
+
         <div class="category-title">Données & APIs</div>
         <a href="${pageContext.request.contextPath}/api/reservations" target="_blank" class="nav-link">
             <i class="fas fa-code"></i> API Réservations
