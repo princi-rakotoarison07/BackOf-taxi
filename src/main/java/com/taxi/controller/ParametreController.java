@@ -40,7 +40,7 @@ public class ParametreController {
             }
             
             // Validation des valeurs
-            if (parametre.getVitesseMoyenne() == null || parametre.getVitesseMoyenne() <= 0) {
+            if (parametre.getVitesseMoyenne() == null || parametre.getVitesseMoyenne().compareTo(java.math.BigDecimal.ZERO) <= 0) {
                 mv.addObject("error", "La vitesse moyenne doit être supérieure à 0 ."+ parametre.getVitesseMoyenne() + parametre.getTempsAttente());
                 return mv;
             }
