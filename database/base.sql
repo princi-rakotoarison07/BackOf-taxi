@@ -56,10 +56,10 @@ CREATE TABLE distance (
 
 CREATE TABLE reservation (
     id_reservation VARCHAR(50) PRIMARY KEY,
-    id_client VARCHAR(50) NOT NULL,       -- peut contenir des lettres
+    id_client VARCHAR(50) NOT NULL,       
     nbr_passager INTEGER NOT NULL CHECK (nbr_passager > 0),
     id_hotel VARCHAR(50) NOT NULL,
-    date_resa TIMESTAMP NOT NULL,         -- Changé en TIMESTAMP pour date et heure
+    date_resa TIMESTAMP NOT NULL,         
 
     CONSTRAINT fk_reservation_hotel
         FOREIGN KEY (id_hotel)
