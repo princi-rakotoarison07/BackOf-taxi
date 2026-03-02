@@ -37,8 +37,12 @@ public class Parametre extends Model {
         return vitesseMoyenne;
     }
     
-    public void setVitesseMoyenne(BigDecimal vitesseMoyenne) {
-        this.vitesseMoyenne = vitesseMoyenne;
+    public void setVitesseMoyenne(String vitesseMoyenne) {
+        if (vitesseMoyenne == null || vitesseMoyenne.trim().isEmpty()) {
+            this.vitesseMoyenne = null;
+            return;
+        }
+        this.vitesseMoyenne = new BigDecimal(vitesseMoyenne.trim());
     }
     
     public Integer getTempsAttente() {
