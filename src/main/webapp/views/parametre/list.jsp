@@ -81,14 +81,16 @@
                                     </td>
                                     <td>
                                         <div class="btn-group" role="group">
-                                            <button type="button" class="btn btn-sm btn-outline-primary" 
-                                                    onclick="editParametre('<%= param.getIdParametre() %>')">
+                                            <a href="${pageContext.request.contextPath}/parametre/edit?id=<%= param.getIdParametre() %>" 
+                                               class="btn btn-sm btn-outline-primary" title="Modifier">
                                                 <i class="fas fa-edit"></i>
-                                            </button>
-                                            <button type="button" class="btn btn-sm btn-outline-danger" 
-                                                    onclick="deleteParametre('<%= param.getIdParametre() %>')">
+                                            </a>
+                                            <a href="${pageContext.request.contextPath}/parametre/delete?id=<%= param.getIdParametre() %>" 
+                                               class="btn btn-sm btn-outline-danger" 
+                                               title="Supprimer"
+                                               onclick="return confirm('Êtes-vous sûr de vouloir supprimer ce paramètre ?')">
                                                 <i class="fas fa-trash"></i>
-                                            </button>
+                                            </a>
                                         </div>
                                     </td>
                                 </tr>

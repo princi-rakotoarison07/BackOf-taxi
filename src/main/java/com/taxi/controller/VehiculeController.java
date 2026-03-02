@@ -58,6 +58,8 @@ public class VehiculeController {
         return mv;
     }
 
+    // assignation supprimée, logique déplacée côté réservations
+
     @PostMapping("/vehicule/save")
     public ModelAndView save(@ModelAttribute Vehicule vehicule) {
         ModelAndView mv = new ModelAndView("/views/vehicule/form.jsp");

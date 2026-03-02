@@ -1,6 +1,7 @@
 package com.taxi.model;
 
 import framework.annotation.Column;
+import framework.annotation.Id;
 import framework.annotation.Table;
 import framework.utilitaire.Model;
 import java.math.BigDecimal;
@@ -8,6 +9,7 @@ import java.math.BigDecimal;
 @Table(name = "parametre")
 public class Parametre extends Model {
     
+    @Id
     @Column(name = "id_parametre")
     private String idParametre;
     

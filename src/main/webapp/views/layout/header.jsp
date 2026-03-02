@@ -302,8 +302,11 @@
         </div>
         
         <div class="category-title">Principal</div>
-        <a href="${pageContext.request.contextPath}/reservation/form" class="nav-link <%= request.getRequestURI().contains("reservation") ? "active" : "" %>">
+        <a href="${pageContext.request.contextPath}/reservation/form" class="nav-link <%= request.getServletPath().contains("reservationForm.jsp") ? "active" : "" %>">
             <i class="fas fa-calendar-check"></i> Réservations
+        </a>
+        <a href="${pageContext.request.contextPath}/reservation/assignation" class="nav-link <%= request.getRequestURI().contains("reservation/assignation") || request.getServletPath().contains("reservationAssignation.jsp") ? "active" : "" %>">
+            <i class="fas fa-tasks"></i> Assignation
         </a>
         <a href="${pageContext.request.contextPath}/vehicule/list" class="nav-link <%= request.getRequestURI().contains("vehicule/list") ? "active" : "" %>">
             <i class="fas fa-list"></i> Liste Véhicules
