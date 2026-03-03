@@ -1,5 +1,6 @@
 package com.taxi.controller;
 
+
 import com.taxi.model.Parametre;
 import com.taxi.util.DBConnection;
 import framework.annotation.Controller;
@@ -50,6 +51,7 @@ public class ParametreController {
 
             if (parametre.getTempsAttente() == null || parametre.getTempsAttente() <= 0) {
                 mv.addObject("error", "Le temps d'attente doit être supérieur à 0");
+<<<<<<< Updated upstream
                 return mv;
             }
 
@@ -103,3 +105,36 @@ public class ParametreController {
         return mv;
     }
 }
+=======
+             
+
+    
+
+    ddObject("
+
+    mv.addObject("parametre
+
+    e.printStackTrace();
+    mv.addObject("error", "Ereur lors de l'enr
+
+    
+
+    
+
+    ic ModelAn 
+
+        
+
+        List<Parametre> parametres = Parametre.getAll(Parametre.clas    mv.addObject("parametes", parametres);
+
+       e
+    .printStackTrace();
+    
+        mv.addObject("error", "Erreur lors du chargement des paramètres : " +
+        
+    
+
+    
+
+
+>>>>>>> Stashed changes
