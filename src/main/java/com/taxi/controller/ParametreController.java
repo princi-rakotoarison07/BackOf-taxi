@@ -52,6 +52,7 @@ public class ParametreController {
             if (parametre.getTempsAttente() == null || parametre.getTempsAttente() <= 0) {
                 mv.addObject("error", "Le temps d'attente doit être supérieur à 0");
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
                 return mv;
             }
 
@@ -106,6 +107,8 @@ public class ParametreController {
     }
 }
 =======
+=======
+>>>>>>> Stashed changes
              
 
     
@@ -137,4 +140,7 @@ public class ParametreController {
     
 
 
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
