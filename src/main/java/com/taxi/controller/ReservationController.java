@@ -145,10 +145,8 @@ public class ReservationController {
             groupedByTime.computeIfAbsent(truncated, k -> new ArrayList<>()).add(r);
         }
 
-        // Pour chaque groupe de temps
         for (Map.Entry<Timestamp, List<Reservation>> entry : groupedByTime.entrySet()) {
             List<Reservation> group = entry.getValue();
-            // Trier par nombre de passagers décroissant pour maximiser le remplissage
             group.sort((a, b) -> b.getNbrPassager().compareTo(a.getNbrPassager()));
 
             Map<Vehicule, Integer> remainingCapacity = new HashMap<>();
@@ -164,14 +162,6 @@ public class ReservationController {
                 }
             }
 
-            // Un véhicule est considéré comme "utilisé" pour ce créneau horaire.
-            // S'il a été assigné à au moins une réservation, on pourrait le retirer de
-            // available
-            // pour les autres créneaux horaires si nécessaire, mais ici on traite chaque
-            // créneau séparément.
-            // Cependant, les règles métier disent qu'un véhicule peut contenir plusieurs
-            // resa SI elles sont à la même heure.
-            // Donc pour les AUTRES heures, le véhicule redevient disponible.
         }
 
         return assignments;
