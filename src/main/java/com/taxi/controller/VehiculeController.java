@@ -13,10 +13,16 @@ import framework.annotation.RestController;
 import framework.utilitaire.ModelAndView;
 import java.sql.Connection;
 import java.sql.Timestamp;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import com.taxi.model.Hotel;
+import com.taxi.model.Distance;
+import com.taxi.model.Parametre;
 
 @Controller
 @RestController
@@ -64,69 +70,50 @@ public class VehiculeController {
     }
 
     @GetMapping("/vehicule/disponible")
-    public ModelAndView disponible(@Param("date") String date) throws Exception {
+    public ModelAndView disponible(@Param("date") String date, @Param("time") String time) throws Exception {
         ModelAndView mv = new ModelAndView("/views/vehicule/disponible.jsp");
         mv.addObject("pageTitle", "Véhicules Disponibles");
         try (Connection conn = DBConnection.getConnection()) {
             List<Vehicule> vehicules = Vehicule.getAll(Vehicule.class, conn);
             List<TypeCarburant> types = TypeCarburant.getAll(TypeCarburant.class, conn);
             List<Reservation> reservations = Reservation.getAll(Reservation.class, conn);
+            List<Hotel> hotels = Hotel.getAll(Hotel.class, conn);
+            List<Distance> distances = Distance.getAll(Distance.class, conn);
+            List<Parametre> parametres = Parametre.getAll(Parametre.class, conn);
+            Parametre currentParam = (parametres != null && !parametres.isEmpty()) ? parametres.get(0) : null;
 
-            List<Reservation> filtered = new ArrayList<>();
-            if (date != null && !date.isEmpty()) {
-                Timestamp start = Timestamp.valueOf(date + " 00:00:00");
-                Timestamp end = Timestamp.valueOf(date + " 23:59:59");
-                for (Reservation r : reservations) {
-                    if (r.getDateResa() != null && !r.getDateResa().before(start) && !r.getDateResa().after(end)) {
-                        filtered.add(r);
-                    }
-                }
+            List<Reservation> filtered = filtrerReservations(reservations, date);
+
+            Map<String, TypeCarburant> typeById = construireMapType(types);
+            Map<String, Hotel> hotelMap = construireMapHotel(hotels);
+            Map<String, Map<String, Distance>> distanceMatrix = construireMatriceDistance(distances);
+
+            // Calculer les assignations pour toute la journée pour connaître les périodes
+            // d'occupation
+            Map<Vehicule, List<Tournee>> planning = calculerPlanningJournée(filtered, vehicules, typeById, hotelMap,
+                    distanceMatrix, currentParam);
+
+            Timestamp targetTime = null;
+            if (date != null && !date.isEmpty() && time != null && !time.isEmpty()) {
+                targetTime = Timestamp.valueOf(date + " " + time + ":00");
             }
 
-            Map<String, TypeCarburant> typeById = new HashMap<>();
-            for (TypeCarburant t : types) {
-                typeById.put(t.getIdTypeCarburant(), t);
-            }
-
-            // Calculer les assignations pour savoir quels véhicules sont occupés
-            List<Vehicule> busyVehicules = new ArrayList<>();
-            List<Vehicule> pool = new ArrayList<>(vehicules);
-            filtered.sort((a, b) -> b.getNbrPassager().compareTo(a.getNbrPassager()));
-            
-            for (Reservation r : filtered) {
-                Vehicule best = null;
-                int bestScoreDiesel = -1;
-                int bestDiff = Integer.MAX_VALUE;
-                for (Vehicule v : pool) {
-                    if (v.getNbrPlace() != null && r.getNbrPassager() != null
-                            && v.getNbrPlace() >= r.getNbrPassager()) {
-                        TypeCarburant t = typeById.get(v.getIdTypeCarburant());
-                        int dieselScore = 0;
-                        if (t != null && t.getCode() != null && t.getCode().equalsIgnoreCase("D")) {
-                            dieselScore = 1;
-                        }
-                        int diff = v.getNbrPlace() - r.getNbrPassager();
-                        if (diff < bestDiff || (diff == bestDiff && dieselScore > bestScoreDiesel)) {
-                            best = v;
-                            bestScoreDiesel = dieselScore;
-                            bestDiff = diff;
-                        }
-                    }
-                }
-                if (best != null) {
-                    busyVehicules.add(best);
-                    pool.remove(best);
-                }
-            }
-
-            // Les véhicules disponibles sont ceux qui ne sont pas occupés
             List<Vehicule> disponibles = new ArrayList<>();
             for (Vehicule v : vehicules) {
                 boolean isBusy = false;
-                for (Vehicule busy : busyVehicules) {
-                    if (busy.getIdVehicule().equals(v.getIdVehicule())) {
-                        isBusy = true;
-                        break;
+                List<Tournee> tournees = planning.get(v);
+                if (tournees != null) {
+                    if (targetTime != null) {
+                        // Vérifier si le véhicule est en tournée à targetTime
+                        for (Tournee t : tournees) {
+                            if (!targetTime.before(t.start) && targetTime.before(t.end)) {
+                                isBusy = true;
+                                break;
+                            }
+                        }
+                    } else {
+                        // Si pas d'heure, on considère occupé s'il a AU MOINS une tournée ce jour
+                        isBusy = !tournees.isEmpty();
                     }
                 }
                 if (!isBusy) {
@@ -137,8 +124,180 @@ public class VehiculeController {
             mv.addObject("disponibles", disponibles);
             mv.addObject("types", types);
             mv.addObject("selectedDate", date);
+            mv.addObject("selectedTime", time);
         }
         return mv;
+    }
+
+    private static class Tournee {
+        Timestamp start;
+        Timestamp end;
+
+        Tournee(Timestamp s, Timestamp e) {
+            this.start = s;
+            this.end = e;
+        }
+    }
+
+    private Map<Vehicule, List<Tournee>> calculerPlanningJournée(List<Reservation> reservations,
+            List<Vehicule> vehicules, Map<String, TypeCarburant> typeById, Map<String, Hotel> hotelMap,
+            Map<String, Map<String, Distance>> distanceMatrix, Parametre param) {
+        Map<Vehicule, List<Tournee>> planning = new HashMap<>();
+
+        // Grouper les réservations par date/heure exacte (tronqué à la minute)
+        Map<Timestamp, List<Reservation>> groupedByTime = new HashMap<>();
+        for (Reservation r : reservations) {
+            if (r.getDateResa() == null)
+                continue;
+            long timeMs = r.getDateResa().getTime();
+            Timestamp truncated = new Timestamp((timeMs / 60000L) * 60000L);
+            groupedByTime.computeIfAbsent(truncated, k -> new ArrayList<>()).add(r);
+        }
+
+        List<Timestamp> sortedTimes = new ArrayList<>(groupedByTime.keySet());
+        Collections.sort(sortedTimes);
+
+        Map<Vehicule, Timestamp> nextFreeTime = new HashMap<>();
+        for (Vehicule v : vehicules) {
+            nextFreeTime.put(v, new Timestamp(0));
+        }
+
+        for (Timestamp t : sortedTimes) {
+            List<Reservation> group = groupedByTime.get(t);
+            group.sort((a, b) -> b.getNbrPassager().compareTo(a.getNbrPassager()));
+
+            Map<Vehicule, Integer> remainingCapacity = new HashMap<>();
+            for (Vehicule v : vehicules) {
+                remainingCapacity.put(v, v.getNbrPlace() != null ? v.getNbrPlace() : 0);
+            }
+
+            Map<Vehicule, List<Reservation>> assignedToVehicule = new HashMap<>();
+            for (Reservation r : group) {
+                Vehicule best = trouverMeilleurVehicule(r, vehicules, remainingCapacity, nextFreeTime, t, typeById);
+                if (best != null) {
+                    remainingCapacity.put(best, remainingCapacity.get(best) - r.getNbrPassager());
+                    assignedToVehicule.computeIfAbsent(best, k -> new ArrayList<>()).add(r);
+                }
+            }
+
+            for (Map.Entry<Vehicule, List<Reservation>> entry : assignedToVehicule.entrySet()) {
+                Vehicule v = entry.getKey();
+                List<Reservation> tourResas = entry.getValue();
+                long durationMs = calculerDureeTournee(tourResas, hotelMap, distanceMatrix, param);
+                Timestamp endTime = new Timestamp(t.getTime() + durationMs);
+                nextFreeTime.put(v, endTime);
+                planning.computeIfAbsent(v, k -> new ArrayList<>()).add(new Tournee(t, endTime));
+            }
+        }
+        return planning;
+    }
+
+    private Vehicule trouverMeilleurVehicule(Reservation r, List<Vehicule> available,
+            Map<Vehicule, Integer> remainingCapacity, Map<Vehicule, Timestamp> nextFreeTime, Timestamp currentTime,
+            Map<String, TypeCarburant> typeById) {
+        Vehicule best = null;
+        int bestScoreDiesel = -1;
+        int bestDiff = Integer.MAX_VALUE;
+
+        for (Vehicule v : available) {
+            int cap = remainingCapacity.getOrDefault(v, 0);
+            Timestamp freeTime = nextFreeTime.getOrDefault(v, new Timestamp(0));
+
+            if (cap >= r.getNbrPassager() && !freeTime.after(currentTime)) {
+                TypeCarburant t = typeById.get(v.getIdTypeCarburant());
+                int dieselScore = (t != null && t.getCode() != null && t.getCode().equalsIgnoreCase("D")) ? 1 : 0;
+                int diff = v.getNbrPlace() - r.getNbrPassager();
+                if (diff < bestDiff || (diff == bestDiff && dieselScore > bestScoreDiesel)) {
+                    best = v;
+                    bestScoreDiesel = dieselScore;
+                    bestDiff = diff;
+                }
+            }
+        }
+        return best;
+    }
+
+    private long calculerDureeTournee(List<Reservation> tour, Map<String, Hotel> hotelMap,
+            Map<String, Map<String, Distance>> distanceMatrix, Parametre param) {
+        if (param == null || param.getVitesseMoyenne() == null
+                || param.getVitesseMoyenne().compareTo(BigDecimal.ZERO) <= 0)
+            return 0;
+        BigDecimal totalDistance = BigDecimal.ZERO;
+        String currentLieu = "LIEU001";
+        List<Reservation> remainingResa = new ArrayList<>(tour);
+        while (!remainingResa.isEmpty()) {
+            Reservation nextResa = null;
+            BigDecimal minDistance = BigDecimal.valueOf(Double.MAX_VALUE);
+            for (Reservation r : remainingResa) {
+                Hotel h = hotelMap.get(r.getIdHotel());
+                if (h != null) {
+                    Distance d = getDistance(distanceMatrix, currentLieu, h.getIdLieu());
+                    if (d != null && d.getKilometre().compareTo(minDistance) < 0) {
+                        minDistance = d.getKilometre();
+                        nextResa = r;
+                    }
+                }
+            }
+            if (nextResa != null) {
+                totalDistance = totalDistance.add(minDistance);
+                Hotel h = hotelMap.get(nextResa.getIdHotel());
+                currentLieu = h.getIdLieu();
+                remainingResa.remove(nextResa);
+            } else
+                break;
+        }
+        Distance retour = getDistance(distanceMatrix, currentLieu, "LIEU001");
+        if (retour != null)
+            totalDistance = totalDistance.add(retour.getKilometre());
+        BigDecimal travelTimeHours = totalDistance.divide(param.getVitesseMoyenne(), 4, RoundingMode.HALF_UP);
+        return (long) (travelTimeHours.doubleValue() * 3600000L);
+    }
+
+    private Distance getDistance(Map<String, Map<String, Distance>> matrix, String from, String to) {
+        if (matrix.containsKey(from)) {
+            Distance d = matrix.get(from).get(to);
+            if (d != null)
+                return d;
+        }
+        if (matrix.containsKey(to))
+            return matrix.get(to).get(from);
+        return null;
+    }
+
+    private List<Reservation> filtrerReservations(List<Reservation> reservations, String date) {
+        if (date == null || date.isEmpty())
+            return new ArrayList<>();
+        List<Reservation> filtered = new ArrayList<>();
+        Timestamp start = Timestamp.valueOf(date + " 00:00:00");
+        Timestamp end = Timestamp.valueOf(date + " 23:59:59");
+        for (Reservation r : reservations) {
+            if (r.getDateResa() != null && !r.getDateResa().before(start) && !r.getDateResa().after(end)) {
+                filtered.add(r);
+            }
+        }
+        return filtered;
+    }
+
+    private Map<String, TypeCarburant> construireMapType(List<TypeCarburant> types) {
+        Map<String, TypeCarburant> map = new HashMap<>();
+        for (TypeCarburant t : types)
+            map.put(t.getIdTypeCarburant(), t);
+        return map;
+    }
+
+    private Map<String, Hotel> construireMapHotel(List<Hotel> hotels) {
+        Map<String, Hotel> map = new HashMap<>();
+        for (Hotel h : hotels)
+            map.put(h.getIdHotel(), h);
+        return map;
+    }
+
+    private Map<String, Map<String, Distance>> construireMatriceDistance(List<Distance> distances) {
+        Map<String, Map<String, Distance>> matrix = new HashMap<>();
+        for (Distance d : distances) {
+            matrix.computeIfAbsent(d.getLieuFrom(), k -> new HashMap<>()).put(d.getLieuTo(), d);
+        }
+        return matrix;
     }
 
     @PostMapping("/vehicule/save")

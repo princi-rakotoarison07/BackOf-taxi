@@ -18,6 +18,7 @@ import com.taxi.model.Hotel;
 import com.taxi.model.Distance;
 import com.taxi.model.Parametre;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Map;
 import java.util.HashMap;
 import java.math.RoundingMode;
@@ -76,7 +77,8 @@ public class ReservationController {
             Map<String, Hotel> hotelMap = construireMapHotel(hotels);
             Map<String, Map<String, Distance>> distanceMatrix = construireMatriceDistance(distances);
 
-            Map<String, Vehicule> assignments = assignerVehicules(filtered, vehicules, typeById);
+            Map<String, Vehicule> assignments = assignerVehicules(filtered, vehicules, typeById, hotelMap,
+                    distanceMatrix, currentParam);
             Map<String, Timestamp> departureTimes = new HashMap<>();
             Map<String, Timestamp> arrivalTimes = new HashMap<>();
 
@@ -130,7 +132,8 @@ public class ReservationController {
     }
 
     private Map<String, Vehicule> assignerVehicules(List<Reservation> reservations, List<Vehicule> vehicules,
-            Map<String, TypeCarburant> typeById) {
+            Map<String, TypeCarburant> typeById, Map<String, Hotel> hotelMap,
+            Map<String, Map<String, Distance>> distanceMatrix, Parametre param) {
         Map<String, Vehicule> assignments = new HashMap<>();
         List<Vehicule> available = new ArrayList<>(vehicules);
 
@@ -145,8 +148,17 @@ public class ReservationController {
             groupedByTime.computeIfAbsent(truncated, k -> new ArrayList<>()).add(r);
         }
 
-        for (Map.Entry<Timestamp, List<Reservation>> entry : groupedByTime.entrySet()) {
-            List<Reservation> group = entry.getValue();
+        // Trier les groupes par temps
+        List<Timestamp> sortedTimes = new ArrayList<>(groupedByTime.keySet());
+        Collections.sort(sortedTimes);
+
+        Map<Vehicule, Timestamp> nextFreeTime = new HashMap<>();
+        for (Vehicule v : available) {
+            nextFreeTime.put(v, new Timestamp(0));
+        }
+
+        for (Timestamp t : sortedTimes) {
+            List<Reservation> group = groupedByTime.get(t);
             group.sort((a, b) -> b.getNbrPassager().compareTo(a.getNbrPassager()));
 
             Map<Vehicule, Integer> remainingCapacity = new HashMap<>();
@@ -154,36 +166,90 @@ public class ReservationController {
                 remainingCapacity.put(v, v.getNbrPlace() != null ? v.getNbrPlace() : 0);
             }
 
+            // On garde trace des réservations assignées à chaque véhicule pour ce groupe
+            Map<Vehicule, List<Reservation>> assignedToVehicule = new HashMap<>();
+
             for (Reservation r : group) {
-                Vehicule best = trouverMeilleurVehiculePourGroupe(r, available, remainingCapacity, typeById);
+                Vehicule best = trouverMeilleurVehiculePourGroupe(r, available, remainingCapacity, nextFreeTime, t,
+                        typeById);
                 if (best != null) {
                     assignments.put(r.getIdReservation(), best);
                     remainingCapacity.put(best, remainingCapacity.get(best) - r.getNbrPassager());
+                    assignedToVehicule.computeIfAbsent(best, k -> new ArrayList<>()).add(r);
                 }
             }
 
+            // Après avoir assigné le groupe, on met à jour nextFreeTime pour les véhicules
+            // utilisés
+            for (Map.Entry<Vehicule, List<Reservation>> entry : assignedToVehicule.entrySet()) {
+                Vehicule v = entry.getKey();
+                List<Reservation> tour = entry.getValue();
+                long durationMs = calculerDureeTournee(tour, hotelMap, distanceMatrix, param);
+                nextFreeTime.put(v, new Timestamp(t.getTime() + durationMs));
+            }
         }
 
         return assignments;
     }
 
+    private long calculerDureeTournee(List<Reservation> tour, Map<String, Hotel> hotelMap,
+            Map<String, Map<String, Distance>> distanceMatrix, Parametre param) {
+        if (param == null || param.getVitesseMoyenne() == null
+                || param.getVitesseMoyenne().compareTo(BigDecimal.ZERO) <= 0)
+            return 0;
+
+        BigDecimal totalDistance = BigDecimal.ZERO;
+        String currentLieu = "LIEU001";
+        List<Reservation> remainingResa = new ArrayList<>(tour);
+
+        while (!remainingResa.isEmpty()) {
+            Reservation nextResa = null;
+            BigDecimal minDistance = BigDecimal.valueOf(Double.MAX_VALUE);
+
+            for (Reservation r : remainingResa) {
+                Hotel h = hotelMap.get(r.getIdHotel());
+                if (h != null) {
+                    Distance d = getDistance(distanceMatrix, currentLieu, h.getIdLieu());
+                    if (d != null && d.getKilometre().compareTo(minDistance) < 0) {
+                        minDistance = d.getKilometre();
+                        nextResa = r;
+                    }
+                }
+            }
+
+            if (nextResa != null) {
+                totalDistance = totalDistance.add(minDistance);
+                Hotel h = hotelMap.get(nextResa.getIdHotel());
+                currentLieu = h.getIdLieu();
+                remainingResa.remove(nextResa);
+            } else {
+                break;
+            }
+        }
+
+        Distance retour = getDistance(distanceMatrix, currentLieu, "LIEU001");
+        if (retour != null) {
+            totalDistance = totalDistance.add(retour.getKilometre());
+        }
+
+        BigDecimal travelTimeHours = totalDistance.divide(param.getVitesseMoyenne(), 4, RoundingMode.HALF_UP);
+        return (long) (travelTimeHours.doubleValue() * 3600000L);
+    }
+
     private Vehicule trouverMeilleurVehiculePourGroupe(Reservation r, List<Vehicule> available,
-            Map<Vehicule, Integer> remainingCapacity, Map<String, TypeCarburant> typeById) {
+            Map<Vehicule, Integer> remainingCapacity, Map<Vehicule, Timestamp> nextFreeTime, Timestamp currentTime,
+            Map<String, TypeCarburant> typeById) {
         Vehicule best = null;
         int bestScoreDiesel = -1;
         int bestDiff = Integer.MAX_VALUE;
 
         for (Vehicule v : available) {
             int cap = remainingCapacity.getOrDefault(v, 0);
-            if (cap >= r.getNbrPassager()) {
+            Timestamp freeTime = nextFreeTime.getOrDefault(v, new Timestamp(0));
+
+            if (cap >= r.getNbrPassager() && !freeTime.after(currentTime)) {
                 TypeCarburant t = typeById.get(v.getIdTypeCarburant());
                 int dieselScore = (t != null && t.getCode() != null && t.getCode().equalsIgnoreCase("D")) ? 1 : 0;
-                // La différence est par rapport à la capacité INITIALE pour le "best fit" du
-                // premier passager,
-                // ou par rapport à la capacité restante ? L'énoncé dit "proche du capacite du
-                // vehicule".
-                // On va garder la logique de proximité à la capacité totale pour le choix
-                // initial.
                 int diff = v.getNbrPlace() - r.getNbrPassager();
 
                 if (diff < bestDiff || (diff == bestDiff && dieselScore > bestScoreDiesel)) {

@@ -33,9 +33,13 @@
     <div class="card shadow-sm border-0 mb-4">
         <div class="card-body">
             <form action="${pageContext.request.contextPath}/vehicule/disponible" method="get" class="row g-3 align-items-end">
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label for="date" class="form-label">Date</label>
                     <input type="date" class="form-control" id="date" name="date" value="<%= selectedDate != null ? selectedDate : "" %>" required>
+                </div>
+                <div class="col-md-3">
+                    <label for="time" class="form-label">Heure</label>
+                    <input type="time" class="form-control" id="time" name="time" value="<%= request.getAttribute("selectedTime") != null ? request.getAttribute("selectedTime") : "" %>">
                 </div>
                 <div class="col-md-2">
                     <button type="submit" class="btn btn-primary w-100">
@@ -48,9 +52,7 @@
 
     <% if (selectedDate != null && !selectedDate.isEmpty()) { %>
     <div class="card shadow-sm border-0">
-        <div class="card-header bg-white py-3">
-            <h5 class="mb-0 fw-bold">Disponibilités pour le <%= selectedDate %></h5>
-        </div>
+
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
