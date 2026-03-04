@@ -74,13 +74,14 @@ public class ReservationController {
 
             Map<String, TypeCarburant> typeById = construireMapType(types);
             Map<String, Hotel> hotelMap = construireMapHotel(hotels);
-            Map<String, Distance> distanceMap = construireMapDistance(distances);
+            Map<String, Map<String, Distance>> distanceMatrix = construireMatriceDistance(distances);
 
             Map<String, Vehicule> assignments = assignerVehicules(filtered, vehicules, typeById);
             Map<String, Timestamp> departureTimes = new HashMap<>();
             Map<String, Timestamp> arrivalTimes = new HashMap<>();
 
-            calculerHoraires(filtered, currentParam, hotelMap, distanceMap, departureTimes, arrivalTimes);
+            calculerHoraires(filtered, currentParam, hotelMap, distanceMatrix, assignments, departureTimes,
+                    arrivalTimes);
 
             mv.addObject("reservations", filtered);
             mv.addObject("types", types);
@@ -120,41 +121,79 @@ public class ReservationController {
         return map;
     }
 
-    private Map<String, Distance> construireMapDistance(List<Distance> distances) {
-        Map<String, Distance> map = new HashMap<>();
+    private Map<String, Map<String, Distance>> construireMatriceDistance(List<Distance> distances) {
+        Map<String, Map<String, Distance>> matrix = new HashMap<>();
         for (Distance d : distances) {
-            if ("LIEU001".equals(d.getLieuFrom()))
-                map.put(d.getLieuTo(), d);
+            matrix.computeIfAbsent(d.getLieuFrom(), k -> new HashMap<>()).put(d.getLieuTo(), d);
         }
-        return map;
+        return matrix;
     }
 
     private Map<String, Vehicule> assignerVehicules(List<Reservation> reservations, List<Vehicule> vehicules,
             Map<String, TypeCarburant> typeById) {
         Map<String, Vehicule> assignments = new HashMap<>();
         List<Vehicule> available = new ArrayList<>(vehicules);
-        reservations.sort((a, b) -> b.getNbrPassager().compareTo(a.getNbrPassager()));
 
+        // Grouper les réservations par date/heure exacte (tronqué à la minute)
+        Map<Timestamp, List<Reservation>> groupedByTime = new HashMap<>();
         for (Reservation r : reservations) {
-            Vehicule best = trouverMeilleurVehicule(r, available, typeById);
-            if (best != null) {
-                assignments.put(r.getIdReservation(), best);
-                available.remove(best);
-            }
+            if (r.getDateResa() == null)
+                continue;
+            // Tronquer à la minute pour le groupement
+            long timeMs = r.getDateResa().getTime();
+            Timestamp truncated = new Timestamp((timeMs / 60000L) * 60000L);
+            groupedByTime.computeIfAbsent(truncated, k -> new ArrayList<>()).add(r);
         }
+
+        // Pour chaque groupe de temps
+        for (Map.Entry<Timestamp, List<Reservation>> entry : groupedByTime.entrySet()) {
+            List<Reservation> group = entry.getValue();
+            // Trier par nombre de passagers décroissant pour maximiser le remplissage
+            group.sort((a, b) -> b.getNbrPassager().compareTo(a.getNbrPassager()));
+
+            Map<Vehicule, Integer> remainingCapacity = new HashMap<>();
+            for (Vehicule v : available) {
+                remainingCapacity.put(v, v.getNbrPlace() != null ? v.getNbrPlace() : 0);
+            }
+
+            for (Reservation r : group) {
+                Vehicule best = trouverMeilleurVehiculePourGroupe(r, available, remainingCapacity, typeById);
+                if (best != null) {
+                    assignments.put(r.getIdReservation(), best);
+                    remainingCapacity.put(best, remainingCapacity.get(best) - r.getNbrPassager());
+                }
+            }
+
+            // Un véhicule est considéré comme "utilisé" pour ce créneau horaire.
+            // S'il a été assigné à au moins une réservation, on pourrait le retirer de
+            // available
+            // pour les autres créneaux horaires si nécessaire, mais ici on traite chaque
+            // créneau séparément.
+            // Cependant, les règles métier disent qu'un véhicule peut contenir plusieurs
+            // resa SI elles sont à la même heure.
+            // Donc pour les AUTRES heures, le véhicule redevient disponible.
+        }
+
         return assignments;
     }
 
-    private Vehicule trouverMeilleurVehicule(Reservation r, List<Vehicule> available,
-            Map<String, TypeCarburant> typeById) {
+    private Vehicule trouverMeilleurVehiculePourGroupe(Reservation r, List<Vehicule> available,
+            Map<Vehicule, Integer> remainingCapacity, Map<String, TypeCarburant> typeById) {
         Vehicule best = null;
         int bestScoreDiesel = -1;
         int bestDiff = Integer.MAX_VALUE;
 
         for (Vehicule v : available) {
-            if (v.getNbrPlace() != null && r.getNbrPassager() != null && v.getNbrPlace() >= r.getNbrPassager()) {
+            int cap = remainingCapacity.getOrDefault(v, 0);
+            if (cap >= r.getNbrPassager()) {
                 TypeCarburant t = typeById.get(v.getIdTypeCarburant());
                 int dieselScore = (t != null && t.getCode() != null && t.getCode().equalsIgnoreCase("D")) ? 1 : 0;
+                // La différence est par rapport à la capacité INITIALE pour le "best fit" du
+                // premier passager,
+                // ou par rapport à la capacité restante ? L'énoncé dit "proche du capacite du
+                // vehicule".
+                // On va garder la logique de proximité à la capacité totale pour le choix
+                // initial.
                 int diff = v.getNbrPlace() - r.getNbrPassager();
 
                 if (diff < bestDiff || (diff == bestDiff && dieselScore > bestScoreDiesel)) {
@@ -168,27 +207,88 @@ public class ReservationController {
     }
 
     private void calculerHoraires(List<Reservation> reservations, Parametre param, Map<String, Hotel> hotelMap,
-            Map<String, Distance> distanceMap, Map<String, Timestamp> departureTimes,
-            Map<String, Timestamp> arrivalTimes) {
+            Map<String, Map<String, Distance>> distanceMatrix, Map<String, Vehicule> assignments,
+            Map<String, Timestamp> departureTimes, Map<String, Timestamp> arrivalTimes) {
         if (param == null || param.getVitesseMoyenne() == null
                 || param.getVitesseMoyenne().compareTo(BigDecimal.ZERO) <= 0)
             return;
 
+        // Grouper par véhicule et heure pour calculer les tournées
+        Map<Vehicule, Map<Timestamp, List<Reservation>>> tournées = new HashMap<>();
         for (Reservation r : reservations) {
-            if (r.getDateResa() == null)
-                continue;
-            Hotel h = hotelMap.get(r.getIdHotel());
-            if (h == null)
-                continue;
-            Distance d = distanceMap.get(h.getIdLieu());
-            if (d == null)
-                continue;
-
-            BigDecimal travelTimeHours = d.getKilometre().divide(param.getVitesseMoyenne(), 4, RoundingMode.HALF_UP);
-            long travelTimeMs = (long) (travelTimeHours.doubleValue() * 3600000L);
-
-            departureTimes.put(r.getIdReservation(), r.getDateResa());
-            arrivalTimes.put(r.getIdReservation(), new Timestamp(r.getDateResa().getTime() + (2 * travelTimeMs)));
+            Vehicule v = assignments.get(r.getIdReservation());
+            if (v != null && r.getDateResa() != null) {
+                tournées.computeIfAbsent(v, k -> new HashMap<>())
+                        .computeIfAbsent(r.getDateResa(), k -> new ArrayList<>())
+                        .add(r);
+            }
         }
+
+        for (Map.Entry<Vehicule, Map<Timestamp, List<Reservation>>> vEntry : tournées.entrySet()) {
+            for (Map.Entry<Timestamp, List<Reservation>> tEntry : vEntry.getValue().entrySet()) {
+                List<Reservation> tour = tEntry.getValue();
+                Timestamp time = tEntry.getKey();
+
+                // Calcul de la tournée optimisée (Greedy TSP à partir de l'aéroport LIEU001)
+                BigDecimal totalDistance = BigDecimal.ZERO;
+                String currentLieu = "LIEU001";
+                List<Reservation> remainingResa = new ArrayList<>(tour);
+
+                while (!remainingResa.isEmpty()) {
+                    Reservation nextResa = null;
+                    BigDecimal minDistance = BigDecimal.valueOf(Double.MAX_VALUE);
+
+                    for (Reservation r : remainingResa) {
+                        Hotel h = hotelMap.get(r.getIdHotel());
+                        if (h != null) {
+                            Distance d = getDistance(distanceMatrix, currentLieu, h.getIdLieu());
+                            if (d != null && d.getKilometre().compareTo(minDistance) < 0) {
+                                minDistance = d.getKilometre();
+                                nextResa = r;
+                            }
+                        }
+                    }
+
+                    if (nextResa != null) {
+                        totalDistance = totalDistance.add(minDistance);
+                        Hotel h = hotelMap.get(nextResa.getIdHotel());
+                        currentLieu = h.getIdLieu();
+                        remainingResa.remove(nextResa);
+                    } else {
+                        // Pas de distance trouvée pour le reste, on sort
+                        break;
+                    }
+                }
+
+                // Retour à l'aéroport
+                Distance retour = getDistance(distanceMatrix, currentLieu, "LIEU001");
+                if (retour != null) {
+                    totalDistance = totalDistance.add(retour.getKilometre());
+                }
+
+                // Temps total de trajet en ms
+                BigDecimal travelTimeHours = totalDistance.divide(param.getVitesseMoyenne(), 4, RoundingMode.HALF_UP);
+                long travelTimeMs = (long) (travelTimeHours.doubleValue() * 3600000L);
+
+                // Appliquer les horaires à toutes les réservations de la tournée
+                for (Reservation r : tour) {
+                    departureTimes.put(r.getIdReservation(), time);
+                    arrivalTimes.put(r.getIdReservation(), new Timestamp(time.getTime() + travelTimeMs));
+                }
+            }
+        }
+    }
+
+    private Distance getDistance(Map<String, Map<String, Distance>> matrix, String from, String to) {
+        if (matrix.containsKey(from)) {
+            Distance d = matrix.get(from).get(to);
+            if (d != null)
+                return d;
+        }
+        // Tenter l'inverse si non trouvé
+        if (matrix.containsKey(to)) {
+            return matrix.get(to).get(from);
+        }
+        return null;
     }
 }

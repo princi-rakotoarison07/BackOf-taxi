@@ -102,7 +102,22 @@ INSERT INTO distance (id_distance, lieu_from, lieu_to, kilometre) VALUES
 ('DIST001', 'LIEU001', 'LIEU005', 18.50), -- Aéroport -> Hotel Colbert (Lieu 005)
 ('DIST002', 'LIEU001', 'LIEU010', 15.20), -- Aéroport -> Novotel (Lieu 010)
 ('DIST003', 'LIEU001', 'LIEU006', 17.80), -- Aéroport -> Ibis (Lieu 006)
-('DIST004', 'LIEU001', 'LIEU008', 20.10); -- Aéroport -> Hotel Lokanga (Lieu 008)
+('DIST004', 'LIEU001', 'LIEU008', 20.10), -- Aéroport -> Hotel Lokanga (Lieu 008)
+
+-- Distances Inter-hôtels (Exemples)
+('DIST005', 'LIEU005', 'LIEU010', 4.50),
+('DIST005', 'LIEU0010', 'LIEU005', 10),
+('DIST006', 'LIEU005', 'LIEU006', 2.30),
+('DIST007', 'LIEU005', 'LIEU008', 3.10),
+('DIST008', 'LIEU010', 'LIEU006', 5.20),
+('DIST009', 'LIEU010', 'LIEU008', 6.40),
+('DIST010', 'LIEU006', 'LIEU008', 2.80),
+
+-- Retours Aéroport (Mêmes distances que l'aller pour la simplicité)
+('DIST011', 'LIEU005', 'LIEU001', 18.50),
+('DIST012', 'LIEU010', 'LIEU001', 15.20),
+('DIST013', 'LIEU006', 'LIEU001', 17.80),
+('DIST014', 'LIEU008', 'LIEU001', 20.10);
 
 INSERT INTO vehicule (id_vehicule, reference, nbr_place, id_type_carburant) VALUES
 ('VH001', 'Toyota Hiace D1', 12, 'TC0001'),
