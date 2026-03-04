@@ -2,6 +2,7 @@ package com.taxi.controller;
 
 import com.taxi.model.Vehicule;
 import com.taxi.model.TypeCarburant;
+import com.taxi.model.Reservation;
 import com.taxi.util.DBConnection;
 import framework.annotation.Controller;
 import framework.annotation.GetMapping;
@@ -11,7 +12,11 @@ import framework.annotation.ModelAttribute;
 import framework.annotation.RestController;
 import framework.utilitaire.ModelAndView;
 import java.sql.Connection;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Controller
 @RestController
@@ -58,7 +63,83 @@ public class VehiculeController {
         return mv;
     }
 
-    // assignation supprimée, logique déplacée côté réservations
+    @GetMapping("/vehicule/disponible")
+    public ModelAndView disponible(@Param("date") String date) throws Exception {
+        ModelAndView mv = new ModelAndView("/views/vehicule/disponible.jsp");
+        mv.addObject("pageTitle", "Véhicules Disponibles");
+        try (Connection conn = DBConnection.getConnection()) {
+            List<Vehicule> vehicules = Vehicule.getAll(Vehicule.class, conn);
+            List<TypeCarburant> types = TypeCarburant.getAll(TypeCarburant.class, conn);
+            List<Reservation> reservations = Reservation.getAll(Reservation.class, conn);
+
+            List<Reservation> filtered = new ArrayList<>();
+            if (date != null && !date.isEmpty()) {
+                Timestamp start = Timestamp.valueOf(date + " 00:00:00");
+                Timestamp end = Timestamp.valueOf(date + " 23:59:59");
+                for (Reservation r : reservations) {
+                    if (r.getDateResa() != null && !r.getDateResa().before(start) && !r.getDateResa().after(end)) {
+                        filtered.add(r);
+                    }
+                }
+            }
+
+            Map<String, TypeCarburant> typeById = new HashMap<>();
+            for (TypeCarburant t : types) {
+                typeById.put(t.getIdTypeCarburant(), t);
+            }
+
+            // Calculer les assignations pour savoir quels véhicules sont occupés
+            List<Vehicule> busyVehicules = new ArrayList<>();
+            List<Vehicule> pool = new ArrayList<>(vehicules);
+            filtered.sort((a, b) -> b.getNbrPassager().compareTo(a.getNbrPassager()));
+            
+            for (Reservation r : filtered) {
+                Vehicule best = null;
+                int bestScoreDiesel = -1;
+                int bestDiff = Integer.MAX_VALUE;
+                for (Vehicule v : pool) {
+                    if (v.getNbrPlace() != null && r.getNbrPassager() != null
+                            && v.getNbrPlace() >= r.getNbrPassager()) {
+                        TypeCarburant t = typeById.get(v.getIdTypeCarburant());
+                        int dieselScore = 0;
+                        if (t != null && t.getCode() != null && t.getCode().equalsIgnoreCase("D")) {
+                            dieselScore = 1;
+                        }
+                        int diff = v.getNbrPlace() - r.getNbrPassager();
+                        if (diff < bestDiff || (diff == bestDiff && dieselScore > bestScoreDiesel)) {
+                            best = v;
+                            bestScoreDiesel = dieselScore;
+                            bestDiff = diff;
+                        }
+                    }
+                }
+                if (best != null) {
+                    busyVehicules.add(best);
+                    pool.remove(best);
+                }
+            }
+
+            // Les véhicules disponibles sont ceux qui ne sont pas occupés
+            List<Vehicule> disponibles = new ArrayList<>();
+            for (Vehicule v : vehicules) {
+                boolean isBusy = false;
+                for (Vehicule busy : busyVehicules) {
+                    if (busy.getIdVehicule().equals(v.getIdVehicule())) {
+                        isBusy = true;
+                        break;
+                    }
+                }
+                if (!isBusy) {
+                    disponibles.add(v);
+                }
+            }
+
+            mv.addObject("disponibles", disponibles);
+            mv.addObject("types", types);
+            mv.addObject("selectedDate", date);
+        }
+        return mv;
+    }
 
     @PostMapping("/vehicule/save")
     public ModelAndView save(@ModelAttribute Vehicule vehicule) {

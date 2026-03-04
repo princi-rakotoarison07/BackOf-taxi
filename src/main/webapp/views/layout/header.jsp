@@ -311,6 +311,9 @@
         <a href="${pageContext.request.contextPath}/vehicule/list" class="nav-link <%= request.getRequestURI().contains("vehicule/list") ? "active" : "" %>">
             <i class="fas fa-list"></i> Liste Véhicules
         </a>
+        <a href="${pageContext.request.contextPath}/vehicule/disponible" class="nav-link <%= request.getRequestURI().contains("vehicule/disponible") || request.getServletPath().contains("disponible.jsp") ? "active" : "" %>">
+            <i class="fas fa-check-circle"></i> Disponibilité
+        </a>
         <a href="${pageContext.request.contextPath}/vehicule/form" class="nav-link <%= request.getRequestURI().contains("vehicule/form") || request.getServletPath().contains("vehicule/form.jsp") ? "active" : "" %>">
              <i class="fas fa-plus-circle"></i> Ajouter Véhicule
          </a>
