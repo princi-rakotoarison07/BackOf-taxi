@@ -12,6 +12,9 @@ public class Hotel extends Model {
     @Column(name = "nom_hotel")
     private String nomHotel;
 
+    @Column(name = "id_lieu")
+    private String idLieu;
+
     public Hotel() {}
 
     public String getIdHotel() { return idHotel; }
@@ -19,4 +22,7 @@ public class Hotel extends Model {
 
     public String getNomHotel() { return nomHotel; }
     public void setNomHotel(String nomHotel) { this.nomHotel = nomHotel; }
+
+    public String getIdLieu() { return idLieu; }
+    public void setIdLieu(String idLieu) { this.idLieu = idLieu; }
 }

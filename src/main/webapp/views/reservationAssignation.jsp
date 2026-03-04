@@ -7,6 +7,8 @@
 <%
     List<Reservation> reservations = (List<Reservation>) request.getAttribute("reservations");
     Map<String, Vehicule> assignments = (Map<String, Vehicule>) request.getAttribute("assignments");
+    Map<String, java.sql.Timestamp> departureTimes = (Map<String, java.sql.Timestamp>) request.getAttribute("departureTimes");
+    Map<String, java.sql.Timestamp> arrivalTimes = (Map<String, java.sql.Timestamp>) request.getAttribute("arrivalTimes");
     List<TypeCarburant> types = (List<TypeCarburant>) request.getAttribute("types");
     String selectedDate = (String) request.getAttribute("selectedDate");
     Map<String, TypeCarburant> typeById = new HashMap<>();
@@ -60,6 +62,8 @@
                             <th>Véhicule</th>
                             <th>Capacité</th>
                             <th>Carburant</th>
+                            <th>Départ Aéroport</th>
+                            <th>Retour Aéroport</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -67,6 +71,8 @@
                             if (reservations != null && !reservations.isEmpty()) {
                                 for (Reservation r : reservations) {
                                     Vehicule v = assignments != null ? assignments.get(r.getIdReservation()) : null;
+                                    java.sql.Timestamp dep = departureTimes != null ? departureTimes.get(r.getIdReservation()) : null;
+                                    java.sql.Timestamp arr = arrivalTimes != null ? arrivalTimes.get(r.getIdReservation()) : null;
                                     TypeCarburant t = null;
                                     if (v != null) {
                                         t = typeById.get(v.getIdTypeCarburant());
@@ -84,11 +90,13 @@
                                     <i class="fas fa-gas-pump me-1"></i><%= t != null ? t.getLibelle() : "-" %>
                                 </span>
                             </td>
+                            <td><%= dep != null ? df.format(dep) : "-" %></td>
+                            <td><%= arr != null ? df.format(arr) : "-" %></td>
                         </tr>
                         <%      }
                             } else { %>
                         <tr>
-                            <td colspan="7" class="text-center py-5">
+                            <td colspan="9" class="text-center py-5">
                                 <div class="text-muted">
                                     <i class="fas fa-calendar-check fa-3x mb-3 opacity-25"></i>
                                     <p class="mb-0">Aucune réservation</p>

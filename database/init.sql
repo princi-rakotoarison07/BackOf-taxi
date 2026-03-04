@@ -96,8 +96,13 @@ INSERT INTO hotel (id_hotel, nom_hotel, id_lieu) VALUES
 ('HOT004', 'Hotel Lokanga', 'LIEU008');
 
 INSERT INTO parametre (id_parametre, vitesse_moyenne, temps_attente) VALUES
-('PARAM001', 40.00, 15),
-('PARAM002', 50.00, 10);
+('PARAM001', 40.00, 15);
+
+INSERT INTO distance (id_distance, lieu_from, lieu_to, kilometre) VALUES
+('DIST001', 'LIEU001', 'LIEU005', 18.50), -- Aéroport -> Hotel Colbert (Lieu 005)
+('DIST002', 'LIEU001', 'LIEU010', 15.20), -- Aéroport -> Novotel (Lieu 010)
+('DIST003', 'LIEU001', 'LIEU006', 17.80), -- Aéroport -> Ibis (Lieu 006)
+('DIST004', 'LIEU001', 'LIEU008', 20.10); -- Aéroport -> Hotel Lokanga (Lieu 008)
 
 INSERT INTO vehicule (id_vehicule, reference, nbr_place, id_type_carburant) VALUES
 ('VH001', 'Toyota Hiace D1', 12, 'TC0001'),
