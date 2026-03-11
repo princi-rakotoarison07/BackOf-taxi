@@ -49,12 +49,10 @@ public class FrontServlet extends HttpServlet {
         }
 
         System.out.println("FrontServlet handling: " + urlPath);
-
         
         String httpMethod = req.getMethod();
         MappingInfo mapping = AnnotationReader.findMappingByUrl(urlPath, httpMethod);
 
-        
         resp.setContentType("text/html;charset=UTF-8");
 
         if (mapping == null || !mapping.isFound()) {
@@ -64,7 +62,7 @@ public class FrontServlet extends HttpServlet {
         }
 
         try {
-            
+            // Multipart config support
             if (req.getContentType() != null && req.getContentType().toLowerCase().startsWith("multipart/")) {
                 req.setAttribute("uploadedFiles", FileUploadUtils.getUploadedFiles(req));
             }
@@ -76,16 +74,21 @@ public class FrontServlet extends HttpServlet {
                 }
             }
 
-            
+            // Build model parameters from request
             Map<String, Object> paramMap = RequestUtils.buildParamMap(req);
             req.setAttribute("params", paramMap);
+
+            // Debug parameter count
+            System.out.println("[FrontServlet] Request Parameters: " + req.getParameterMap().size());
+            for (String key : req.getParameterMap().keySet()) {
+                System.out.println("[FrontServlet]   " + key + " = " + String.join(", ", req.getParameterValues(key)));
+            }
 
             Class<?> controllerClass = mapping.getControllerClass();
             boolean isRest = controllerClass.isAnnotationPresent(RestController.class);
             Object controllerInstance = controllerClass.getDeclaredConstructor().newInstance();
             Method method = mapping.getMethod();
 
-            
             boolean requiresAuth = controllerClass.isAnnotationPresent(Authorized.class)
                     || method.isAnnotationPresent(Authorized.class);
             if (requiresAuth) {
@@ -104,7 +107,6 @@ public class FrontServlet extends HttpServlet {
                 }
             }
 
-            
             Role roleAnn = method.getAnnotation(Role.class);
             if (roleAnn == null) {
                 roleAnn = controllerClass.getAnnotation(Role.class);
@@ -117,13 +119,11 @@ public class FrontServlet extends HttpServlet {
                 HttpSession session = req.getSession(false);
                 Object marker = (session != null) ? session.getAttribute(roleAttr) : null;
 
-                // Build a set of current roles from the session attribute
                 java.util.Set<String> currentRoles = new java.util.HashSet<>();
                 if (marker != null) {
                     if (marker instanceof String) {
                         String s = ((String) marker).trim();
                         if (!s.isEmpty()) {
-                            // Support comma-separated roles in a single String
                             for (String part : s.split(",")) {
                                 String role = part.trim();
                                 if (!role.isEmpty()) currentRoles.add(role.toLowerCase());
@@ -156,7 +156,6 @@ public class FrontServlet extends HttpServlet {
                 }
             }
 
-            // Build method arguments: support HttpServletRequest/HttpServletResponse and @ModelAttribute binding
             Parameter[] params = method.getParameters();
             Object[] args = new Object[params.length];
             for (int i = 0; i < params.length; i++) {
@@ -171,19 +170,24 @@ public class FrontServlet extends HttpServlet {
                         continue;
                     }
                 } else if (params[i].isAnnotationPresent(ModelAttribute.class)) {
-                    // Bind a complex object from request parameters
                     args[i] = ModelBinder.bind(req, pt);
                 } else if (params[i].isAnnotationPresent(RequestBody.class)) {
-                    // Bind from JSON body
                     String body = RequestUtils.getRequestBody(req);
                     args[i] = JsonUtils.fromJson(body, pt);
                 } else {
-                    // Try to resolve using @Param annotation first
                     Param pAnn = params[i].getAnnotation(Param.class);
-                    String raw = null;
-                    if (pAnn != null) {
-                        String paramName = pAnn.value();
-                        // Uploaded file binding support
+                    String paramName = (pAnn != null) ? pAnn.value() : params[i].getName();
+                    System.out.println("[FrontServlet] Resolving param: " + paramName + " for type: " + pt.getName());
+
+                    if (pt.isArray()) {
+                        String[] values = req.getParameterValues(paramName);
+                        System.out.println("[FrontServlet]   Values found: " + (values != null ? String.join(", ", values) : "null"));
+                        if (values != null) {
+                            args[i] = convertArray(values, pt.getComponentType());
+                        } else {
+                            args[i] = null;
+                        }
+                    } else {
                         if (UploadedFile.class.isAssignableFrom(pt)) {
                             Object mapObj = req.getAttribute("uploadedFiles");
                             if (mapObj instanceof Map) {
@@ -193,7 +197,8 @@ public class FrontServlet extends HttpServlet {
                                 continue;
                             }
                         }
-                        raw = req.getParameter(paramName);
+
+                        String raw = req.getParameter(paramName);
                         if (raw == null) {
                             Object attr = req.getAttribute(paramName);
                             if (attr != null) {
@@ -204,26 +209,12 @@ public class FrontServlet extends HttpServlet {
                                 raw = String.valueOf(attr);
                             }
                         }
-                    } else {
-                        // Fallback: try parameter name (requires -parameters at compile time) or attribute
-                        String guessName = params[i].getName();
-                        raw = req.getParameter(guessName);
-                        if (raw == null) {
-                            Object attr = req.getAttribute(guessName);
-                            if (attr != null) {
-                                if (pt.isInstance(attr)) {
-                                    args[i] = attr;
-                                    continue;
-                                }
-                                raw = String.valueOf(attr);
-                            }
-                        }
-                    }
 
-                    if (raw != null) {
-                        args[i] = convertValue(raw, pt);
-                    } else {
-                        args[i] = pt.isPrimitive() ? defaultForPrimitive(pt) : null;
+                        if (raw != null) {
+                            args[i] = convertValue(raw, pt);
+                        } else {
+                            args[i] = pt.isPrimitive() ? defaultForPrimitive(pt) : null;
+                        }
                     }
                 }
             }
@@ -236,23 +227,19 @@ public class FrontServlet extends HttpServlet {
                     String redirectUrl = req.getContextPath() + mv.getView();
                     resp.sendRedirect(redirectUrl);
                 } else {
-                    // Set model attributes
                     for (Map.Entry<String, Object> entry : mv.getModel().entrySet()) {
                         req.setAttribute(entry.getKey(), entry.getValue());
                     }
-                    // Forward to JSP view
                     RequestDispatcher dispatcher = req.getRequestDispatcher(mv.getView());
                     dispatcher.forward(req, resp);
                 }
             } else if (isRest) {
-                // Serialize to JSON
                 resp.setContentType("application/json;charset=UTF-8");
                 String json = JsonUtils.toJson(result);
                 resp.getWriter().write(json);
             } else if (result == null) {
                 resp.getWriter().write("");
             } else {
-                // Default textual rendering
                 resp.getWriter().write(String.valueOf(result));
             }
         } catch (Exception e) {
@@ -260,6 +247,14 @@ public class FrontServlet extends HttpServlet {
             resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             resp.getWriter().write("<h1>500 - Erreur serveur</h1><pre>" + e.getMessage() + "</pre>");
         }
+    }
+
+    private Object convertArray(String[] values, Class<?> componentType) {
+        Object array = java.lang.reflect.Array.newInstance(componentType, values.length);
+        for (int i = 0; i < values.length; i++) {
+            java.lang.reflect.Array.set(array, i, convertValue(values[i], componentType));
+        }
+        return array;
     }
 
     private Object convertValue(String raw, Class<?> targetType) {
@@ -284,9 +279,7 @@ public class FrontServlet extends HttpServlet {
                 Class<? extends Enum> et = (Class<? extends Enum>) targetType;
                 return Enum.valueOf(et, raw);
             }
-        } catch (Exception ignore) {
-            // fall through to return null/default
-        }
+        } catch (Exception ignore) {}
         return null;
     }
 

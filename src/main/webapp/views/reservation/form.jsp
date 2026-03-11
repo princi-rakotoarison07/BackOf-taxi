@@ -1,3 +1,4 @@
+<%@ page contentType="text/html;charset=UTF-8" language="java" %>
 <%@ page import="com.taxi.model.Hotel" %>
 <%@ page import="java.util.List" %>
 <% request.setAttribute("pageTitle", "Nouvelle Réservation"); %>
@@ -30,7 +31,8 @@
             <button type="button" class="btn btn-primary" onclick="addRow()">+ Ajouter une ligne</button>
         </div>
         <div class="card-body p-0">
-            <form action="${pageContext.request.contextPath}/reservation/save-multiple" method="POST">
+            <form id="reservationForm" action="${pageContext.request.contextPath}/reservation/save-multiple" method="POST" onsubmit="return collectData()">
+                <input type="hidden" name="reservationsData" id="reservationsData">
                 <div class="table-responsive">
                     <table class="table align-middle mb-0" id="reservationTable">
                         <thead>
@@ -46,16 +48,16 @@
                         <tbody>
                             <tr class="reservation-row">
                                 <td class="ps-4">
-                                    <input type="text" name="idReservation" class="form-control" placeholder="RES0001" required>
+                                    <input type="text" class="form-control field-id" placeholder="RES0001" required>
                                 </td>
                                 <td>
-                                    <input type="text" name="idClient" class="form-control" placeholder="CLT042" required>
+                                    <input type="text" class="form-control field-client" placeholder="CLT042" required>
                                 </td>
                                 <td>
-                                    <input type="number" name="nbrPassager" class="form-control" min="1" required>
+                                    <input type="number" class="form-control field-pax" min="1" required>
                                 </td>
                                 <td>
-                                    <select name="idHotel" class="form-select hotel-select" required>
+                                    <select class="form-select hotel-select field-hotel" required>
                                         <option value="">-- Sélectionner --</option>
                                         <% if (hotelsList != null) { 
                                             for (Hotel h : hotelsList) { %>
@@ -65,7 +67,7 @@
                                     </select>
                                 </td>
                                 <td>
-                                    <input type="datetime-local" name="dateResa" class="form-control">
+                                    <input type="datetime-local" class="form-control field-date">
                                 </td>
                                 <td class="pe-4">
                                     <button type="button" class="btn btn-dark btn-sm" onclick="removeRow(this)">-</button>
@@ -74,13 +76,15 @@
                         </tbody>
                     </table>
                 </div>
-                <div class="p-4 border-top d-flex justify-content-end gap-3">
-                    <div class="me-auto align-self-center">
-                        <span class="stats-title me-2">Hôtels en base :</span>
-                        <span class="status-highlight" id="hotelCount"><%= hotelsList != null ? hotelsList.size() : 0 %></span>
+                <div class="p-4 border-top d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <span class="stats-title me-2">Base de données :</span>
+                        <span class="status-highlight"><%= hotelsList != null ? hotelsList.size() : 0 %> Hôtels</span>
                     </div>
-                    <button type="reset" class="btn border">Annuler</button>
-                    <button type="submit" class="btn btn-primary btn-lg">Confirmer toutes les réservations</button>
+                    <div class="d-flex gap-3">
+                        <button type="reset" class="btn border">Vider</button>
+                        <button type="submit" class="btn btn-primary btn-lg">Confirmer l'envoi</button>
+                    </div>
                 </div>
             </form>
         </div>
@@ -102,27 +106,45 @@
         newRow.className = 'reservation-row';
         newRow.innerHTML = `
             <td class="ps-4">
-                <input type="text" name="idReservation" class="form-control" placeholder="RES0001" required>
+                <input type="text" class="form-control field-id" placeholder="RES0001" required>
             </td>
             <td>
-                <input type="text" name="idClient" class="form-control" placeholder="CLT042" required>
+                <input type="text" class="form-control field-client" placeholder="CLT042" required>
             </td>
             <td>
-                <input type="number" name="nbrPassager" class="form-control" min="1" required>
+                <input type="number" class="form-control field-pax" min="1" required>
             </td>
             <td>
-                <select name="idHotel" class="form-select hotel-select" required>
-                    ${hotelOptions}
+                <select class="form-select hotel-select field-hotel" required>
+                    \${hotelOptions}
                 </select>
             </td>
             <td>
-                <input type="datetime-local" name="dateResa" class="form-control">
+                <input type="datetime-local" class="form-control field-date">
             </td>
             <td class="pe-4">
                 <button type="button" class="btn btn-dark btn-sm" onclick="removeRow(this)">-</button>
             </td>
         `;
         tbody.appendChild(newRow);
+    }
+
+    function collectData() {
+        const rows = document.querySelectorAll('.reservation-row');
+        let data = '';
+        rows.forEach((row, index) => {
+            const id = row.querySelector('.field-id').value;
+            const client = row.querySelector('.field-client').value;
+            const pax = row.querySelector('.field-pax').value;
+            const hotel = row.querySelector('.field-hotel').value;
+            const date = row.querySelector('.field-date').value;
+            
+            if (id && client && pax && hotel) {
+                data += `\${id}|\${client}|\${pax}|\${hotel}|\${date};`;
+            }
+        });
+        document.getElementById('reservationsData').value = data;
+        return true;
     }
 
     function removeRow(btn) {

@@ -156,6 +156,14 @@
         }
 
         /* Statut Système - Vert Fluo */
+        .stats-title {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 700;
+            color: #666;
+        }
+
         .status-highlight {
             background-color: var(--primary-color);
             color: var(--bg-dark);

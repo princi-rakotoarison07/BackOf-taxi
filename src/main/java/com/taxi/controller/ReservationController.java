@@ -61,32 +61,43 @@ public class ReservationController {
     }
 
     @PostMapping("/reservation/save-multiple")
-    public ModelAndView saveMultiple(
-            @Param("idReservation") String[] ids,
-            @Param("idClient") String[] clients,
-            @Param("nbrPassager") Integer[] passagers,
-            @Param("idHotel") String[] hotels,
-            @Param("dateResa") String[] dates) {
+    public ModelAndView saveMultiple(@Param("reservationsData") String data) {
         ModelAndView mv = new ModelAndView("/views/result.jsp");
+        if (data == null || data.trim().isEmpty()) {
+            mv.addObject("error", "Aucune donnée reçue.");
+            return mv;
+        }
+
         try (Connection conn = DBConnection.getConnection()) {
             conn.setAutoCommit(false);
             try {
-                for (int i = 0; i < ids.length; i++) {
-                    if (ids[i] == null || ids[i].isEmpty()) continue;
+                int count = 0;
+                // Format: idRes|idClient|nbrPax|idHotel|date;idRes2|...
+                String[] rows = data.split(";");
+                for (String row : rows) {
+                    if (row.trim().isEmpty()) continue;
+                    String[] fields = row.split("\\|");
+                    if (fields.length < 4) continue;
+
                     Reservation r = new Reservation();
-                    r.setIdReservation(ids[i]);
-                    r.setIdClient(clients[i]);
-                    r.setNbrPassager(passagers[i]);
-                    r.setIdHotel(hotels[i]);
-                    if (dates[i] != null && !dates[i].isEmpty()) {
-                        r.setDateResa(Timestamp.valueOf(dates[i].replace("T", " ") + ":00"));
+                    r.setIdReservation(fields[0]);
+                    r.setIdClient(fields[1]);
+                    r.setNbrPassager(Integer.parseInt(fields[2]));
+                    r.setIdHotel(fields[3]);
+
+                    if (fields.length > 4 && !fields[4].isEmpty()) {
+                        String dateStr = fields[4].replace("T", " ");
+                        if (dateStr.length() == 16) dateStr += ":00";
+                        r.setDateResa(Timestamp.valueOf(dateStr));
                     } else {
                         r.setDateResa(new Timestamp(System.currentTimeMillis()));
                     }
+
                     r.insert(conn);
+                    count++;
                 }
                 conn.commit();
-                mv.addObject("message", ids.length + " réservations enregistrées !");
+                mv.addObject("message", count + " réservations enregistrées !");
             } catch (Exception e) {
                 conn.rollback();
                 throw e;
