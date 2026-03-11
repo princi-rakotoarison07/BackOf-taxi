@@ -36,21 +36,61 @@ public class ReservationController {
     }
 
     @GetMapping("/reservation/form")
-    public ModelAndView showForm() {
-        return new ModelAndView("/views/reservation/form.jsp");
+    public ModelAndView showForm() throws Exception {
+        ModelAndView mv = new ModelAndView("/views/reservation/form.jsp");
+        try (Connection conn = DBConnection.getConnection()) {
+            List<Hotel> hotels = Hotel.getAll(Hotel.class, conn);
+            mv.addObject("hotels", hotels);
+        }
+        return mv;
     }
 
     @PostMapping("/reservation/save")
     public ModelAndView save(@ModelAttribute Reservation reservation) {
         ModelAndView mv = new ModelAndView("/views/result.jsp");
         try (Connection conn = DBConnection.getConnection()) {
-            // Si la date est nulle, on met la date actuelle
             if (reservation.getDateResa() == null) {
                 reservation.setDateResa(new Timestamp(System.currentTimeMillis()));
             }
-
             reservation.insert(conn);
-            mv.addObject("message", "Réservation enregistrée avec succès !");
+            mv.addObject("message", "Réservation enregistrée !");
+        } catch (Exception e) {
+            mv.addObject("error", "Erreur : " + e.getMessage());
+        }
+        return mv;
+    }
+
+    @PostMapping("/reservation/save-multiple")
+    public ModelAndView saveMultiple(
+            @Param("idReservation") String[] ids,
+            @Param("idClient") String[] clients,
+            @Param("nbrPassager") Integer[] passagers,
+            @Param("idHotel") String[] hotels,
+            @Param("dateResa") String[] dates) {
+        ModelAndView mv = new ModelAndView("/views/result.jsp");
+        try (Connection conn = DBConnection.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                for (int i = 0; i < ids.length; i++) {
+                    if (ids[i] == null || ids[i].isEmpty()) continue;
+                    Reservation r = new Reservation();
+                    r.setIdReservation(ids[i]);
+                    r.setIdClient(clients[i]);
+                    r.setNbrPassager(passagers[i]);
+                    r.setIdHotel(hotels[i]);
+                    if (dates[i] != null && !dates[i].isEmpty()) {
+                        r.setDateResa(Timestamp.valueOf(dates[i].replace("T", " ") + ":00"));
+                    } else {
+                        r.setDateResa(new Timestamp(System.currentTimeMillis()));
+                    }
+                    r.insert(conn);
+                }
+                conn.commit();
+                mv.addObject("message", ids.length + " réservations enregistrées !");
+            } catch (Exception e) {
+                conn.rollback();
+                throw e;
+            }
         } catch (Exception e) {
             e.printStackTrace();
             mv.addObject("error", "Erreur lors de l'enregistrement : " + e.getMessage());

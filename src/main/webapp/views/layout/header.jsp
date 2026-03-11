@@ -142,13 +142,17 @@
 
         .form-control, .form-select {
             border-radius: 0;
-            border: 1px solid var(--border-color);
+            border: 1px solid var(--bg-dark); /* Bordure Noire */
             padding: 12px;
+            color: var(--text-dark); /* Texte Noir */
+            background-color: var(--bg-light);
         }
 
         .form-control:focus, .form-select:focus {
             border-color: var(--bg-dark);
-            box-shadow: none;
+            background-color: #f0f0f0;
+            box-shadow: 0 0 0 2px var(--primary-color);
+            outline: none;
         }
 
         /* Statut Système - Vert Fluo */
