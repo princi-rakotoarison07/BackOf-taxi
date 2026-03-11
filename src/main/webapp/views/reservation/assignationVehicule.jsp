@@ -31,44 +31,35 @@
     java.text.SimpleDateFormat df = new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm");
 %>
 <div class="container-fluid">
-    <div class="d-flex align-items-center justify-content-between mb-4">
-        <div>
-            <h3 class="fw-bold mb-0">Assignation par Véhicule</h3>
-            <nav aria-label="breadcrumb">
-                <ol class="breadcrumb mb-0">
-                    <li class="breadcrumb-item"><a href="${pageContext.request.contextPath}/reservation/form" class="text-decoration-none">Réservations</a></li>
-                    <li class="breadcrumb-item active">Assignation par Véhicule</li>
-                </ol>
-            </nav>
-        </div>
+    <div class="mb-4">
+        <h3 class="fw-bold mb-1">Assignation par Véhicule</h3>
+        <p class="text-muted small">Vue groupée par moyen de transport</p>
     </div>
 
-    <div class="card shadow-sm border-0 mb-4">
+    <div class="card mb-4">
         <div class="card-body">
             <form method="get" action="${pageContext.request.contextPath}/reservation/assignation-vehicule" class="row g-3">
                 <div class="col-md-4">
-                    <label for="date" class="form-label">Date</label>
+                    <label for="date" class="form-label">Filtrer par date</label>
                     <input type="date" class="form-control" id="date" name="date" value="<%= selectedDate != null ? selectedDate : "" %>" required>
                 </div>
                 <div class="col-md-3 d-flex align-items-end">
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-sync-alt me-1"></i> Afficher
-                    </button>
+                    <button type="submit" class="btn btn-primary">Mettre à jour</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <div class="card shadow-sm border-0">
-        <div class="card-header bg-white py-3 d-flex align-items-center justify-content-between">
-            <h5 class="mb-0 fw-bold">Véhicules et Réservations assignées</h5>
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">Planning des véhicules</h5>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table align-middle mb-0">
-                    <thead class="bg-light text-muted">
+                    <thead>
                         <tr>
-                            <th style="width: 50px;"></th>
+                            <th style="width: 60px;"></th>
                             <th>Véhicule</th>
                             <th>Capacité</th>
                             <th>Carburant</th>
@@ -86,55 +77,52 @@
                                         TypeCarburant t = typeById.get(v.getIdTypeCarburant());
                                         String collapseId = "collapse-" + v.getIdVehicule();
                         %>
-                        <tr class="bg-white">
+                        <tr class="bg-white border-bottom">
                             <td class="text-center">
-                                <button class="btn btn-sm btn-outline-primary rounded-circle" type="button" 
-                                        data-bs-toggle="collapse" data-bs-target="#<%= collapseId %>" 
-                                        aria-expanded="false" style="width: 30px; height: 30px; padding: 0;">
-                                    <i class="fas fa-plus"></i>
+                                <button class="btn btn-sm btn-dark" type="button" 
+                                        data-bs-toggle="collapse" data-bs-target="#<%= collapseId %>">
+                                    +
                                 </button>
                             </td>
-                            <td><span class="fw-bold text-primary"><%= v.getIdVehicule() %></span></td>
-                            <td><%= v.getNbrPlace() != null ? v.getNbrPlace() : "-" %></td>
+                            <td class="fw-bold"><%= v.getIdVehicule() %></td>
+                            <td><%= v.getNbrPlace() != null ? v.getNbrPlace() : "-" %> places</td>
                             <td>
-                                <span class="badge bg-indigo-soft text-primary">
-                                    <i class="fas fa-gas-pump me-1"></i><%= t != null ? t.getLibelle() : "-" %>
-                                </span>
+                                <% if (t != null) { %>
+                                    <span class="badge-system"><%= t.getLibelle() %></span>
+                                <% } %>
                             </td>
                             <td><%= selectedDate != null ? selectedDate : "-" %></td>
                         </tr>
                         <tr class="collapse" id="<%= collapseId %>">
-                            <td colspan="5" class="p-0">
-                                <div class="bg-light p-3 border-top border-bottom">
-                                    <table class="table table-sm table-bordered bg-white mb-0 shadow-sm">
-                                        <thead class="table-secondary small">
-                                            <tr>
-                                                <th>ID Réservation</th>
-                                                <th>Client</th>
-                                                <th>Passagers</th>
-                                                <th>Date Resa</th>
-                                                <th>Départ Aéroport</th>
-                                                <th>Retour Aéroport</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <%
-                                                for (Reservation r : assignedResas) {
-                                                    java.sql.Timestamp dep = departureTimes != null ? departureTimes.get(r.getIdReservation()) : null;
-                                                    java.sql.Timestamp arr = arrivalTimes != null ? arrivalTimes.get(r.getIdReservation()) : null;
-                                            %>
-                                            <tr class="small">
-                                                <td>#<%= r.getIdReservation() %></td>
-                                                <td><%= r.getIdClient() %></td>
-                                                <td><%= r.getNbrPassager() %></td>
-                                                <td><%= r.getDateResa() != null ? df.format(r.getDateResa()) : "-" %></td>
-                                                <td><%= dep != null ? df.format(dep) : "-" %></td>
-                                                <td><%= arr != null ? df.format(arr) : "-" %></td>
-                                            </tr>
-                                            <% } %>
-                                        </tbody>
-                                    </table>
-                                </div>
+                            <td colspan="5" class="p-4 bg-light">
+                                <table class="table table-sm table-bordered bg-white mb-0">
+                                    <thead class="bg-dark text-white">
+                                        <tr style="font-size: 0.7rem;">
+                                            <th>ID</th>
+                                            <th>Client</th>
+                                            <th>Pax</th>
+                                            <th>Date Resa</th>
+                                            <th>Départ</th>
+                                            <th>Retour</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <%
+                                            for (Reservation r : assignedResas) {
+                                                java.sql.Timestamp dep = departureTimes != null ? departureTimes.get(r.getIdReservation()) : null;
+                                                java.sql.Timestamp arr = arrivalTimes != null ? arrivalTimes.get(r.getIdReservation()) : null;
+                                        %>
+                                        <tr style="font-size: 0.85rem;">
+                                            <td>#<%= r.getIdReservation() %></td>
+                                            <td><%= r.getIdClient() %></td>
+                                            <td><%= r.getNbrPassager() %></td>
+                                            <td><%= r.getDateResa() != null ? df.format(r.getDateResa()) : "-" %></td>
+                                            <td class="fw-bold text-dark"><%= dep != null ? df.format(dep) : "-" %></td>
+                                            <td class="fw-bold text-dark"><%= arr != null ? df.format(arr) : "-" %></td>
+                                        </tr>
+                                        <% } %>
+                                    </tbody>
+                                </table>
                             </td>
                         </tr>
                         <%
@@ -145,10 +133,7 @@
                         %>
                         <tr>
                             <td colspan="5" class="text-center py-5">
-                                <div class="text-muted">
-                                    <i class="fas fa-calendar-check fa-3x mb-3 opacity-25"></i>
-                                    <p class="mb-0">Aucun véhicule n'a de réservation pour cette date.</p>
-                                </div>
+                                <p class="text-muted">Aucune assignation pour cette période.</p>
                             </td>
                         </tr>
                         <% } %>
@@ -158,24 +143,5 @@
         </div>
     </div>
 </div>
-
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Toggle icon plus/minus on collapse
-        const collapses = document.querySelectorAll('.collapse');
-        collapses.forEach(el => {
-            el.addEventListener('show.bs.collapse', function () {
-                const btn = document.querySelector(`[data-bs-target="#${el.id}"]`);
-                btn.innerHTML = '<i class="fas fa-minus"></i>';
-                btn.classList.replace('btn-outline-primary', 'btn-primary');
-            });
-            el.addEventListener('hide.bs.collapse', function () {
-                const btn = document.querySelector(`[data-bs-target="#${el.id}"]`);
-                btn.innerHTML = '<i class="fas fa-plus"></i>';
-                btn.classList.replace('btn-primary', 'btn-outline-primary');
-            });
-        });
-    });
-</script>
 
 <jsp:include page="../layout/footer.jsp" />
