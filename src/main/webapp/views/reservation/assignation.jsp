@@ -3,7 +3,7 @@
 <%@ page import="com.taxi.model.Reservation" %>
 <%@ page import="com.taxi.model.Vehicule" %>
 <%@ page import="com.taxi.model.TypeCarburant" %>
-<jsp:include page="layout/header.jsp" />
+<jsp:include page="../layout/header.jsp" />
 <%
     List<Reservation> reservations = (List<Reservation>) request.getAttribute("reservations");
     Map<String, Vehicule> assignments = (Map<String, Vehicule>) request.getAttribute("assignments");
@@ -110,4 +110,4 @@
         </div>
     </div>
 </div>
-<jsp:include page="layout/footer.jsp" />
+<jsp:include page="../layout/footer.jsp" />

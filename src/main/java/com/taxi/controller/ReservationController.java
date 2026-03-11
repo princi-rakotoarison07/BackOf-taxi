@@ -37,7 +37,7 @@ public class ReservationController {
 
     @GetMapping("/reservation/form")
     public ModelAndView showForm() {
-        return new ModelAndView("/views/reservationForm.jsp");
+        return new ModelAndView("/views/reservation/form.jsp");
     }
 
     @PostMapping("/reservation/save")
@@ -60,8 +60,21 @@ public class ReservationController {
 
     @GetMapping("/reservation/assignation")
     public ModelAndView assignation(@Param("date") String date) throws Exception {
-        ModelAndView mv = new ModelAndView("/views/reservationAssignation.jsp");
+        ModelAndView mv = new ModelAndView("/views/reservation/assignation.jsp");
         mv.addObject("pageTitle", "Assignation des Réservations");
+        prepareAssignationData(mv, date);
+        return mv;
+    }
+
+    @GetMapping("/reservation/assignation-vehicule")
+    public ModelAndView assignationVehicule(@Param("date") String date) throws Exception {
+        ModelAndView mv = new ModelAndView("/views/reservation/assignationVehicule.jsp");
+        mv.addObject("pageTitle", "Assignation par Véhicule");
+        prepareAssignationData(mv, date);
+        return mv;
+    }
+
+    private void prepareAssignationData(ModelAndView mv, String date) throws Exception {
         try (Connection conn = DBConnection.getConnection()) {
             List<Reservation> allReservations = Reservation.getAll(Reservation.class, conn);
             List<Vehicule> vehicules = Vehicule.getAll(Vehicule.class, conn);
@@ -86,13 +99,13 @@ public class ReservationController {
                     arrivalTimes);
 
             mv.addObject("reservations", filtered);
+            mv.addObject("vehicules", vehicules);
             mv.addObject("types", types);
             mv.addObject("assignments", assignments);
             mv.addObject("departureTimes", departureTimes);
             mv.addObject("arrivalTimes", arrivalTimes);
             mv.addObject("selectedDate", date);
         }
-        return mv;
     }
 
     private List<Reservation> filtrerReservations(List<Reservation> reservations, String date) {
