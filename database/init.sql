@@ -106,7 +106,7 @@ INSERT INTO distance (id_distance, lieu_from, lieu_to, kilometre) VALUES
 
 -- Distances Inter-hôtels (Exemples)
 ('DIST005', 'LIEU005', 'LIEU010', 4.50),
-('DIST005', 'LIEU0010', 'LIEU005', 10),
+('DIST015', 'LIEU010', 'LIEU005', 10),
 ('DIST006', 'LIEU005', 'LIEU006', 2.30),
 ('DIST007', 'LIEU005', 'LIEU008', 3.10),
 ('DIST008', 'LIEU010', 'LIEU006', 5.20),
