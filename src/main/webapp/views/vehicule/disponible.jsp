@@ -23,7 +23,7 @@
             <h3 class="fw-bold mb-0">Véhicules Disponibles</h3>
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb mb-0">
-                    <li class="breadcrumb-item"><a href="${pageContext.request.contextPath}/vehicule/list" class="text-decoration-none">Véhicules</a></li>
+                    <li class="breadcrumb-item"><a href="${pageContext.request.contextPath}/BackOf-taxi/vehicule/list" class="text-decoration-none">Véhicules</a></li>
                     <li class="breadcrumb-item active">Disponibilité</li>
                 </ol>
             </nav>
@@ -32,7 +32,7 @@
 
     <div class="card shadow-sm border-0 mb-4">
         <div class="card-body">
-            <form action="${pageContext.request.contextPath}/vehicule/disponible" method="get" class="row g-3 align-items-end">
+            <form action="${pageContext.request.contextPath}/BackOf-taxi/vehicule/disponible" method="get" class="row g-3 align-items-end">
                 <div class="col-md-3">
                     <label for="date" class="form-label">Date</label>
                     <input type="date" class="form-control" id="date" name="date" value="<%= selectedDate != null ? selectedDate : "" %>" required>

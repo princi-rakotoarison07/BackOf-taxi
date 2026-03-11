@@ -25,7 +25,7 @@
 
     <div class="card mb-4">
         <div class="card-body">
-            <form method="get" action="${pageContext.request.contextPath}/reservation/assignation" class="row g-3">
+            <form method="get" action="${pageContext.request.contextPath}/BackOf-taxi/reservation/assignation" class="row g-3">
                 <div class="col-md-4">
                     <label for="date" class="form-label">Filtrer par date</label>
                     <input type="date" class="form-control" id="date" name="date" value="<%= selectedDate != null ? selectedDate : "" %>" required>

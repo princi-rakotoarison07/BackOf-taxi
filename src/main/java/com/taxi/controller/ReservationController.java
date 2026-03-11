@@ -28,14 +28,14 @@ import java.math.BigDecimal;
 @RestController
 public class ReservationController {
 
-    @GetMapping("/api/reservations")
+    @GetMapping("/BackOf-taxi/api/reservations")
     public List<Reservation> listReservations() throws Exception {
         try (Connection conn = DBConnection.getConnection()) {
             return Reservation.getAll(Reservation.class, conn);
         }
     }
 
-    @GetMapping("/reservation/form")
+    @GetMapping("/BackOf-taxi/reservation/form")
     public ModelAndView showForm() throws Exception {
         ModelAndView mv = new ModelAndView("/views/reservation/form.jsp");
         try (Connection conn = DBConnection.getConnection()) {
@@ -45,7 +45,7 @@ public class ReservationController {
         return mv;
     }
 
-    @PostMapping("/reservation/save")
+    @PostMapping("/BackOf-taxi/reservation/save")
     public ModelAndView save(@ModelAttribute Reservation reservation) {
         ModelAndView mv = new ModelAndView("/views/result.jsp");
         try (Connection conn = DBConnection.getConnection()) {
@@ -60,7 +60,7 @@ public class ReservationController {
         return mv;
     }
 
-    @PostMapping("/reservation/save-multiple")
+    @PostMapping("/BackOf-taxi/reservation/save-multiple")
     public ModelAndView saveMultiple(@Param("reservationsData") String data) {
         ModelAndView mv = new ModelAndView("/views/result.jsp");
         if (data == null || data.trim().isEmpty()) {
@@ -109,7 +109,7 @@ public class ReservationController {
         return mv;
     }
 
-    @GetMapping("/reservation/assignation")
+    @GetMapping("/BackOf-taxi/reservation/assignation")
     public ModelAndView assignation(@Param("date") String date) throws Exception {
         ModelAndView mv = new ModelAndView("/views/reservation/assignation.jsp");
         mv.addObject("pageTitle", "Assignation des Réservations");
@@ -117,7 +117,7 @@ public class ReservationController {
         return mv;
     }
 
-    @GetMapping("/reservation/assignation-vehicule")
+    @GetMapping("/BackOf-taxi/reservation/assignation-vehicule")
     public ModelAndView assignationVehicule(@Param("date") String date) throws Exception {
         ModelAndView mv = new ModelAndView("/views/reservation/assignationVehicule.jsp");
         mv.addObject("pageTitle", "Assignation par Véhicule");

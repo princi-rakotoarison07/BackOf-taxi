@@ -14,7 +14,7 @@
         <div>
             <h3 class="fw-bold mb-0">Gestion des Véhicules</h3>
         </div>
-        <a href="${pageContext.request.contextPath}/vehicule/form" class="btn btn-primary">
+        <a href="${pageContext.request.contextPath}/BackOf-taxi/vehicule/form" class="btn btn-primary">
             + Ajouter
         </a>
     </div>
@@ -68,8 +68,8 @@
                                 <span class="badge-system"><%= libelleCarburant %></span>
                             </td>
                             <td class="text-end pe-4">
-                                <a href="${pageContext.request.contextPath}/vehicule/edit?id=<%= v.getIdVehicule() %>" class="btn btn-sm border me-1">Edit</a>
-                                <a href="${pageContext.request.contextPath}/vehicule/delete?id=<%= v.getIdVehicule() %>" 
+                                <a href="${pageContext.request.contextPath}/BackOf-taxi/vehicule/edit?id=<%= v.getIdVehicule() %>" class="btn btn-sm border me-1">Edit</a>
+                                <a href="${pageContext.request.contextPath}/BackOf-taxi/vehicule/delete?id=<%= v.getIdVehicule() %>" 
                                    class="btn btn-sm btn-dark" 
                                    onclick="return confirm('Supprimer ce véhicule ?')">Del</a>
                             </td>

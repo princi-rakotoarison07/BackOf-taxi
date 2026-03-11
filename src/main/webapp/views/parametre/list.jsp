@@ -11,7 +11,7 @@
                             <i class="fas fa-list text-primary me-2"></i>
                             Liste des Paramètres
                         </h5>
-                        <a href="${pageContext.request.contextPath}/parametre/form" class="btn btn-primary btn-sm">
+                        <a href="${pageContext.request.contextPath}/BackOf-taxi/parametre/form" class="btn btn-primary btn-sm">
                             <i class="fas fa-plus me-1"></i> Nouveau Paramètre
                         </a>
                     </div>
@@ -81,11 +81,11 @@
                                     </td>
                                     <td>
                                         <div class="btn-group" role="group">
-                                            <a href="${pageContext.request.contextPath}/parametre/edit?id=<%= param.getIdParametre() %>" 
+                                            <a href="${pageContext.request.contextPath}/BackOf-taxi/parametre/edit?id=<%= param.getIdParametre() %>" 
                                                class="btn btn-sm btn-outline-primary" title="Modifier">
                                                 <i class="fas fa-edit"></i>
                                             </a>
-                                            <a href="${pageContext.request.contextPath}/parametre/delete?id=<%= param.getIdParametre() %>" 
+                                            <a href="${pageContext.request.contextPath}/BackOf-taxi/parametre/delete?id=<%= param.getIdParametre() %>" 
                                                class="btn btn-sm btn-outline-danger" 
                                                title="Supprimer"
                                                onclick="return confirm('Êtes-vous sûr de vouloir supprimer ce paramètre ?')">
@@ -191,13 +191,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function editParametre(id) {
     // Rediriger vers le formulaire en mode édition
-    window.location.href = '${pageContext.request.contextPath}/parametre/edit?id=' + id;
+    window.location.href = '${pageContext.request.contextPath}/BackOf-taxi/parametre/edit?id=' + id;
 }
 
 function deleteParametre(id) {
     if (confirm('Êtes-vous sûr de vouloir supprimer ce paramètre ?')) {
         // Appel à l'API de suppression
-        fetch('${pageContext.request.contextPath}/parametre/delete?id=' + id, {
+        fetch('${pageContext.request.contextPath}/BackOf-taxi/parametre/delete?id=' + id, {
             method: 'DELETE'
         })
         .then(response => {

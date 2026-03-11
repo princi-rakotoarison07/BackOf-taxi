@@ -70,7 +70,7 @@
                         </div>
 
                         <div class="d-flex justify-content-end gap-3 border-top pt-4">
-                            <a href="${pageContext.request.contextPath}/vehicule/list" class="btn border">Annuler</a>
+                            <a href="${pageContext.request.contextPath}/BackOf-taxi/vehicule/list" class="btn border">Annuler</a>
                             <button type="submit" class="btn btn-primary"><%= submitText %></button>
                         </div>
                     </form>

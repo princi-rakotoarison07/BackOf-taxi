@@ -61,7 +61,7 @@
                 <version>11.0.18</version>
                 <configuration>
                     <webApp>
-                        <contextPath>/BackOf-taxi</contextPath>
+                        <contextPath>/</contextPath>
                     </webApp>
                 </configuration>
             </plugin>

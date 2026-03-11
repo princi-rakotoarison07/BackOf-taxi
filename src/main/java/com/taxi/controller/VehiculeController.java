@@ -28,14 +28,14 @@ import com.taxi.model.Parametre;
 @RestController
 public class VehiculeController {
 
-    @GetMapping("/api/type-carburants")
+    @GetMapping("/BackOf-taxi/api/type-carburants")
     public List<TypeCarburant> listTypeCarburants() throws Exception {
         try (Connection conn = DBConnection.getConnection()) {
             return TypeCarburant.getAll(TypeCarburant.class, conn);
         }
     }
 
-    @GetMapping("/vehicule/list")
+    @GetMapping("/BackOf-taxi/vehicule/list")
     public ModelAndView list() throws Exception {
         ModelAndView mv = new ModelAndView("/views/vehicule/list.jsp");
         try (Connection conn = DBConnection.getConnection()) {
@@ -47,7 +47,7 @@ public class VehiculeController {
         return mv;
     }
 
-    @GetMapping("/vehicule/form")
+    @GetMapping("/BackOf-taxi/vehicule/form")
     public ModelAndView showForm() throws Exception {
         ModelAndView mv = new ModelAndView("/views/vehicule/form.jsp");
         try (Connection conn = DBConnection.getConnection()) {
@@ -57,7 +57,7 @@ public class VehiculeController {
         return mv;
     }
 
-    @GetMapping("/vehicule/edit")
+    @GetMapping("/BackOf-taxi/vehicule/edit")
     public ModelAndView edit(@Param("id") String id) throws Exception {
         ModelAndView mv = new ModelAndView("/views/vehicule/form.jsp");
         try (Connection conn = DBConnection.getConnection()) {
@@ -69,7 +69,7 @@ public class VehiculeController {
         return mv;
     }
 
-    @GetMapping("/vehicule/disponible")
+    @GetMapping("/BackOf-taxi/vehicule/disponible")
     public ModelAndView disponible(@Param("date") String date, @Param("time") String time) throws Exception {
         ModelAndView mv = new ModelAndView("/views/vehicule/disponible.jsp");
         mv.addObject("pageTitle", "Véhicules Disponibles");
@@ -300,7 +300,7 @@ public class VehiculeController {
         return matrix;
     }
 
-    @PostMapping("/vehicule/save")
+    @PostMapping("/BackOf-taxi/vehicule/save")
     public ModelAndView save(@ModelAttribute Vehicule vehicule) {
         ModelAndView mv = new ModelAndView("/views/vehicule/form.jsp");
         try (Connection conn = DBConnection.getConnection()) {
@@ -322,7 +322,7 @@ public class VehiculeController {
         return mv;
     }
 
-    @PostMapping("/vehicule/update")
+    @PostMapping("/BackOf-taxi/vehicule/update")
     public ModelAndView update(@ModelAttribute Vehicule vehicule) {
         ModelAndView mv = new ModelAndView("/views/vehicule/form.jsp");
         try (Connection conn = DBConnection.getConnection()) {
@@ -346,9 +346,9 @@ public class VehiculeController {
         return mv;
     }
 
-    @GetMapping("/vehicule/delete")
+    @GetMapping("/BackOf-taxi/vehicule/delete")
     public ModelAndView delete(@Param("id") String id) {
-        ModelAndView mv = new ModelAndView("/vehicule/list");
+        ModelAndView mv = new ModelAndView("/BackOf-taxi/vehicule/list");
         mv.setRedirect(true);
         try (Connection conn = DBConnection.getConnection()) {
             Vehicule.deleteById(Vehicule.class, id, conn);

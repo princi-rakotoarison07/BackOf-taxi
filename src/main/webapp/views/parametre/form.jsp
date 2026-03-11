@@ -21,7 +21,7 @@
                         <div class="status-highlight mb-4">SUCCESS: <%= request.getAttribute("success") %></div>
                     <% } %>
 
-                    <form action="${pageContext.request.contextPath}/parametre/insert" method="post">
+                    <form action="${pageContext.request.contextPath}/BackOf-taxi/parametre/insert" method="post">
                         <div class="row g-4">
                             <div class="col-md-6">
                                 <label for="vitesseMoyenne" class="form-label">Vitesse Moyenne (km/h)</label>

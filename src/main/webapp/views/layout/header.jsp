@@ -208,7 +208,7 @@
         </div>
         
         <div class="category-title">Principal</div>
-        <a href="${pageContext.request.contextPath}/reservation/form" class="nav-link <%= request.getServletPath().contains("reservation/form.jsp") ? "active" : "" %>">
+        <a href="${pageContext.request.contextPath}/BackOf-taxi/reservation/form" class="nav-link <%= request.getServletPath().contains("reservation/form.jsp") ? "active" : "" %>">
             <i class="fas fa-calendar-check"></i> Réservations
         </a>
         
@@ -217,37 +217,37 @@
                 <i class="fas fa-tasks"></i> Assignation <i class="fas fa-chevron-down ms-auto small"></i>
             </a>
             <div class="collapse <%= request.getRequestURI().contains("reservation/assignation") ? "show" : "" %>" id="assignationSubmenu">
-                <a href="${pageContext.request.contextPath}/reservation/assignation" class="nav-link ps-5 py-2 small <%= request.getServletPath().contains("reservation/assignation.jsp") ? "fw-bold text-primary" : "" %>">
+                <a href="${pageContext.request.contextPath}/BackOf-taxi/reservation/assignation" class="nav-link ps-5 py-2 small <%= request.getServletPath().contains("reservation/assignation.jsp") ? "fw-bold text-primary" : "" %>">
                     <i class="fas fa-list-ul me-2" style="font-size: 0.8rem;"></i> Par Réservation
                 </a>
-                <a href="${pageContext.request.contextPath}/reservation/assignation-vehicule" class="nav-link ps-5 py-2 small <%= request.getServletPath().contains("reservation/assignationVehicule.jsp") ? "fw-bold text-primary" : "" %>">
+                <a href="${pageContext.request.contextPath}/BackOf-taxi/reservation/assignation-vehicule" class="nav-link ps-5 py-2 small <%= request.getServletPath().contains("reservation/assignationVehicule.jsp") ? "fw-bold text-primary" : "" %>">
                     <i class="fas fa-car me-2" style="font-size: 0.8rem;"></i> Par Véhicule
                 </a>
             </div>
         </div>
-        <a href="${pageContext.request.contextPath}/vehicule/list" class="nav-link <%= request.getRequestURI().contains("vehicule/list") ? "active" : "" %>">
+        <a href="${pageContext.request.contextPath}/BackOf-taxi/vehicule/list" class="nav-link <%= request.getRequestURI().contains("vehicule/list") ? "active" : "" %>">
             <i class="fas fa-list"></i> Liste Véhicules
         </a>
-        <a href="${pageContext.request.contextPath}/vehicule/disponible" class="nav-link <%= request.getRequestURI().contains("vehicule/disponible") || request.getServletPath().contains("disponible.jsp") ? "active" : "" %>">
+        <a href="${pageContext.request.contextPath}/BackOf-taxi/vehicule/disponible" class="nav-link <%= request.getRequestURI().contains("vehicule/disponible") || request.getServletPath().contains("disponible.jsp") ? "active" : "" %>">
             <i class="fas fa-check-circle"></i> Disponibilité
         </a>
-        <a href="${pageContext.request.contextPath}/vehicule/form" class="nav-link <%= request.getRequestURI().contains("vehicule/form") || request.getServletPath().contains("vehicule/form.jsp") ? "active" : "" %>">
+        <a href="${pageContext.request.contextPath}/BackOf-taxi/vehicule/form" class="nav-link <%= request.getRequestURI().contains("vehicule/form") || request.getServletPath().contains("vehicule/form.jsp") ? "active" : "" %>">
              <i class="fas fa-plus-circle"></i> Ajouter Véhicule
          </a>
 
         <div class="category-title">Configuration</div>
-        <a href="${pageContext.request.contextPath}/parametre/form" class="nav-link <%= request.getRequestURI().contains("parametre") ? "active" : "" %>">
+        <a href="${pageContext.request.contextPath}/BackOf-taxi/parametre/form" class="nav-link <%= request.getRequestURI().contains("parametre") ? "active" : "" %>">
             <i class="fas fa-cogs"></i> Paramètres
         </a>
 
         <div class="category-title">Données & APIs</div>
-        <a href="${pageContext.request.contextPath}/api/reservations" target="_blank" class="nav-link">
+        <a href="${pageContext.request.contextPath}/BackOf-taxi/api/reservations" target="_blank" class="nav-link">
             <i class="fas fa-code"></i> API Réservations
         </a>
-        <a href="${pageContext.request.contextPath}/api/hotels" target="_blank" class="nav-link">
+        <a href="${pageContext.request.contextPath}/BackOf-taxi/api/hotels" target="_blank" class="nav-link">
             <i class="fas fa-hotel"></i> API Hôtels
         </a>
-        <a href="${pageContext.request.contextPath}/api/type-carburants" target="_blank" class="nav-link">
+        <a href="${pageContext.request.contextPath}/BackOf-taxi/api/type-carburants" target="_blank" class="nav-link">
             <i class="fas fa-gas-pump"></i> API Carburants
         </a>
     </nav>

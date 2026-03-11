@@ -48,7 +48,7 @@
             <h3 class="fw-bold mb-0">Assignation par Véhicule</h3>
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb mb-0">
-                    <li class="breadcrumb-item"><a href="${pageContext.request.contextPath}/reservation/form" class="text-decoration-none">Réservations</a></li>
+                    <li class="breadcrumb-item"><a href="${pageContext.request.contextPath}/BackOf-taxi/reservation/form" class="text-decoration-none">Réservations</a></li>
                     <li class="breadcrumb-item active">Assignation par Véhicule</li>
                 </ol>
             </nav>
@@ -57,7 +57,7 @@
 
     <div class="card shadow-sm border-0 mb-4">
         <div class="card-body">
-            <form method="get" action="${pageContext.request.contextPath}/reservation/assignation-vehicule" class="row g-3">
+            <form method="get" action="${pageContext.request.contextPath}/BackOf-taxi/reservation/assignation-vehicule" class="row g-3">
                 <div class="col-md-4">
                     <label for="date" class="form-label">Date</label>
                     <input type="date" class="form-control" id="date" name="date" value="<%= selectedDate != null ? selectedDate : "" %>" required>

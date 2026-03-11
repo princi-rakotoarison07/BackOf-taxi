@@ -31,7 +31,7 @@
             <button type="button" class="btn btn-primary" onclick="addRow()">+ Ajouter une ligne</button>
         </div>
         <div class="card-body p-0">
-            <form id="reservationForm" action="${pageContext.request.contextPath}/reservation/save-multiple" method="POST" onsubmit="return collectData()">
+            <form id="reservationForm" action="${pageContext.request.contextPath}/BackOf-taxi/reservation/save-multiple" method="POST" onsubmit="return collectData()">
                 <input type="hidden" name="reservationsData" id="reservationsData">
                 <div class="table-responsive">
                     <table class="table align-middle mb-0" id="reservationTable">
