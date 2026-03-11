@@ -275,7 +275,7 @@
                     <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-3">
                         <li><a class="dropdown-item py-2" href="#"><i class="fas fa-cog fa-sm fa-fw me-2 text-gray-400"></i> Paramètres</a></li>
                         <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item py-2 text-danger" href="#"><i class="fas fa-sign-out-alt fa-sm fa-fw me-2"></i> Déconnexion</a></li>
+                        <li><a class="dropdown-item py-2 text-danger" href="${pageContext.request.contextPath}/"><i class="fas fa-sign-out-alt fa-sm fa-fw me-2"></i> Déconnexion</a></li>
                     </ul>
                 </div>
             </div>
