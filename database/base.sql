@@ -100,4 +100,12 @@ INSERT INTO type_carburant (id_type_carburant, code, libelle) VALUES
 ('TC0003', 'El', 'Electrique'),
 ('TC0004', 'H', 'Hybride');
 
+CREATE SEQUENCE seq_token;
+
+CREATE TABLE token (
+    id_token VARCHAR(50) PRIMARY KEY,
+    token VARCHAR(255) NOT NULL UNIQUE,
+    date_heure_expiration TIMESTAMP NOT NULL
+);
+
 
