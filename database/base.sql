@@ -6,10 +6,12 @@ DROP TABLE IF EXISTS hotel CASCADE;
 DROP TABLE IF EXISTS lieuhotel CASCADE;
 DROP TABLE IF EXISTS parametre CASCADE;
 DROP TABLE IF EXISTS distance CASCADE;
+DROP TABLE IF EXISTS token CASCADE;
 
 -- Suppression des séquences si elles existent
 DROP SEQUENCE IF EXISTS seq_hotel;
 DROP SEQUENCE IF EXISTS seq_reservation;
+DROP SEQUENCE IF EXISTS seq_token;
 
 
 CREATE TABLE lieuhotel (
