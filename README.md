@@ -1,19 +1,25 @@
-# BackOf-taxi (Back-Office de Réservation)
+# BackOf-taxi (Portail Central & Back-Office)
 
-Ce projet est le Back-Office du système de réservation de taxi, développé avec un **Framework Java Web personnalisé**.
+Ce projet est le point d'entrée central du système **inDrive** et son Back-Office de gestion de taxi, développé avec un **Framework Java Web personnalisé**.
 
 ## 🚀 Fonctionnalités
 
-- **Formulaire de Réservation** : Saisie des réservations avec calendrier dynamique.
-- **Gestion des Hôtels** : API REST pour récupérer la liste des hôtels.
-- **API Réservations** : API REST exposant la liste des réservations au format JSON.
-- **ORM Minimaliste** : Utilisation d'annotations (`@Table`, `@Column`) pour la persistance PostgreSQL.
+- **Portail Central (Redirection)** : Accès direct via `http://localhost:8080/` avec redirection automatique vers le portail de sélection.
+- **Interface de Sélection (Home)** : Une page d'accueil moderne permettant de choisir entre le Back-Office et le Front-Office.
+- **Gestion des Réservations** : Saisie multiple des réservations avec calendrier dynamique.
+- **Assignation Intelligente** : Algorithme d'assignation des véhicules aux réservations selon la capacité et le carburant.
+- **Gestion des Véhicules** : Liste, ajout, modification et suppression des véhicules.
+- **APIs REST** : Exposition des données (Hôtels, Réservations, Carburants) au format JSON.
+
+## 🎨 Identité Visuelle
+
+L'interface a été refondue pour adopter le style **inDrive** :
+- **Couleurs** : Noir, Blanc et Vert Fluo (`#c1f11d`).
+- **Style** : Minimaliste, contrasté et ergonomique.
 
 ## 🛠️ Configuration
 
-Le fichier de configuration `src/main/resources/config.properties` est ignoré par Git pour des raisons de sécurité.
-
-Veuillez créer ce fichier avec le contenu suivant :
+Le fichier `src/main/resources/config.properties` doit être configuré localement :
 
 ```properties
 base.package=com.taxi
@@ -23,27 +29,27 @@ db.password=votre_mot_de_passe
 db.driver=org.postgresql.Driver
 ```
 
-- **Base de données** : PostgreSQL (scripts disponibles dans `database/base.sql`).
+- **Base de données** : PostgreSQL.
 - **Serveur** : Jetty 11 (compatible Jakarta EE).
 
 ## 🏃 Démarrage
-
-Pour lancer le projet sans installation manuelle sur Tomcat :
 
 ```bash
 mvn jetty:run
 ```
 
-L'application sera disponible sur : [http://localhost:8080/BackOf-taxi](http://localhost:8080/BackOf-taxi)
+L'application est disponible sur : [http://localhost:8080/](http://localhost:8080/)
+*(Redirige vers [http://localhost:8080/BackOf-taxi/](http://localhost:8080/BackOf-taxi/))*
 
-### URLs utiles :
+### URLs du Back-Office :
 
-- Formulaire : `/reservation/form`
-- API Hôtels : `/api/hotels`
-- API Réservations : `/api/reservations`
+- **Accueil Portail** : `/BackOf-taxi/`
+- **Formulaire Réservation** : `/BackOf-taxi/reservation/form`
+- **Liste Véhicules** : `/BackOf-taxi/vehicule/list`
+- **Paramètres** : `/BackOf-taxi/parametre/form`
 
 ## 📦 Structure
 
-- `src/main/java/com/taxi/controller` : Contrôleurs du framework.
-- `src/main/java/com/taxi/model` : Entités liées à la base de données.
-- `modules/framework.jar` : Le framework personnalisé utilisé par le projet.
+- `src/main/java/com/taxi/controller` : Contrôleurs gérant les routes préfixées `/BackOf-taxi/`.
+- `src/main/webapp/views` : Pages JSP utilisant le layout unifié.
+- `modules/framework.jar` : Framework Java Web personnalisé.

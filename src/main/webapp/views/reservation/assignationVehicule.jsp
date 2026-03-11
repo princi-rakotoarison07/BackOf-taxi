@@ -86,6 +86,7 @@
                             <th>Carburant</th>
                             <th>Départ Aéroport</th>
                             <th>Retour Aéroport</th>
+                            <th>Places Disponibles</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -105,6 +106,12 @@
                                     Vehicule v = vehiculeMap.get(vId);
                                     TypeCarburant t = v != null ? typeById.get(v.getIdTypeCarburant()) : null;
                                     String collapseId = "collapse-" + (count++);
+
+                                    int totalPax = 0;
+                                    for (Reservation r : assignedResas) {
+                                        if (r.getNbrPassager() != null) totalPax += r.getNbrPassager();
+                                    }
+                                    int availableSeats = (v != null && v.getNbrPlace() != null) ? (v.getNbrPlace() - totalPax) : 0;
                         %>
                         <tr class="bg-white">
                             <td class="text-center">
@@ -123,9 +130,14 @@
                             </td>
                             <td><%= depTime %></td>
                             <td><%= arrTime %></td>
+                            <td>
+                                <span class="badge <%= availableSeats > 0 ? "bg-success-soft text-success" : "bg-danger-soft text-danger" %>">
+                                    <%= availableSeats %> places
+                                </span>
+                            </td>
                         </tr>
                         <tr class="collapse" id="<%= collapseId %>">
-                            <td colspan="6" class="p-0">
+                            <td colspan="7" class="p-0">
                                 <div class="bg-light p-3 border-top border-bottom">
                                     <table class="table table-sm table-bordered bg-white mb-0 shadow-sm">
                                         <thead class="table-secondary small">
@@ -158,7 +170,7 @@
                             if (!hasAssignments) {
                         %>
                         <tr>
-                            <td colspan="6" class="text-center py-5">
+                            <td colspan="7" class="text-center py-5">
                                 <div class="text-muted">
                                     <i class="fas fa-calendar-check fa-3x mb-3 opacity-25"></i>
                                     <p class="mb-0">Aucun véhicule n'a de réservation pour cette date.</p>

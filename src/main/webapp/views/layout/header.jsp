@@ -192,6 +192,10 @@
 
         /* Suppression des éléments parasites */
         .stats-icon-wrapper, .icon-circle { display: none !important; }
+
+        .bg-indigo-soft { background-color: rgba(99, 102, 241, 0.1); }
+        .bg-success-soft { background-color: rgba(34, 197, 94, 0.1); }
+        .bg-danger-soft { background-color: rgba(239, 68, 68, 0.1); }
         
         @media (max-width: 992px) {
             #sidebar { left: -var(--sidebar-width); }
