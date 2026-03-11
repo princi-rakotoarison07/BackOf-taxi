@@ -125,6 +125,14 @@ public class ReservationController {
             Parametre currentParam = (parametres != null && !parametres.isEmpty()) ? parametres.get(0) : null;
 
             List<Reservation> filtered = filtrerReservations(allReservations, date);
+            // Trier par date de réservation
+            filtered.sort((a, b) -> {
+                if (a.getDateResa() == null)
+                    return 1;
+                if (b.getDateResa() == null)
+                    return -1;
+                return a.getDateResa().compareTo(b.getDateResa());
+            });
 
             Map<String, TypeCarburant> typeById = construireMapType(types);
             Map<String, Hotel> hotelMap = construireMapHotel(hotels);
@@ -327,8 +335,11 @@ public class ReservationController {
         for (Reservation r : reservations) {
             Vehicule v = assignments.get(r.getIdReservation());
             if (v != null && r.getDateResa() != null) {
+                // Tronquer à la minute pour le groupement, comme dans assignerVehicules
+                long timeMs = r.getDateResa().getTime();
+                Timestamp truncated = new Timestamp((timeMs / 60000L) * 60000L);
                 tournées.computeIfAbsent(v, k -> new HashMap<>())
-                        .computeIfAbsent(r.getDateResa(), k -> new ArrayList<>())
+                        .computeIfAbsent(truncated, k -> new ArrayList<>())
                         .add(r);
             }
         }
