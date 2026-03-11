@@ -1,21 +1,21 @@
-INSERT INTO lieuhotel (id_lieu, nom_lieu, ville) VALUES
-('LIEU001', 'Aéroport International d''Antananarivo', 'Antananarivo'),
-('LIEU002', 'Gare Routière de Soarano', 'Antananarivo'),
-('LIEU003', 'Stade Municipal de Mahamasina', 'Antananarivo'),
-('LIEU004', 'Jardin Botanique de Tsimbazaza', 'Antananarivo'),
-('LIEU005', 'Palais de la Reine', 'Antananarivo'),
-('LIEU006', 'Marché Analakely', 'Antananarivo'),
-('LIEU007', 'Lac Anosy', 'Antananarivo'),
-('LIEU008', 'Rova d''Antananarivo', 'Antananarivo'),
-('LIEU009', 'Parc Zoologique de Tsimbazaza', 'Antananarivo'),
-('LIEU010', 'Centre Commercial Acacia', 'Antananarivo');
+-- INSERT INTO lieuhotel (id_lieu, nom_lieu, ville) VALUES
+-- ('LIEU001', 'Aéroport International d''Antananarivo', 'Antananarivo'),
+-- ('LIEU002', 'Gare Routière de Soarano', 'Antananarivo'),
+-- ('LIEU003', 'Stade Municipal de Mahamasina', 'Antananarivo'),
+-- ('LIEU004', 'Jardin Botanique de Tsimbazaza', 'Antananarivo'),
+-- ('LIEU005', 'Palais de la Reine', 'Antananarivo'),
+-- ('LIEU006', 'Marché Analakely', 'Antananarivo'),
+-- ('LIEU007', 'Lac Anosy', 'Antananarivo'),
+-- ('LIEU008', 'Rova d''Antananarivo', 'Antananarivo'),
+-- ('LIEU009', 'Parc Zoologique de Tsimbazaza', 'Antananarivo'),
+-- ('LIEU010', 'Centre Commercial Acacia', 'Antananarivo');
 
 
-INSERT INTO hotel (id_hotel, nom_hotel, id_lieu) VALUES
-('HOT001', 'Hotel Colbert Antananarivo', 'LIEU005'),
-('HOT002', 'Novotel Antananarivo', 'LIEU010'),
-('HOT003', 'Ibis Antananarivo', 'LIEU006'),
-('HOT004', 'Hotel Lokanga', 'LIEU008');
+-- INSERT INTO hotel (id_hotel, nom_hotel, id_lieu) VALUES
+-- ('HOT001', 'Hotel Colbert Antananarivo', 'LIEU005'),
+-- ('HOT002', 'Novotel Antananarivo', 'LIEU010'),
+-- ('HOT003', 'Ibis Antananarivo', 'LIEU006'),
+-- ('HOT004', 'Hotel Lokanga', 'LIEU008');
 
 
 
