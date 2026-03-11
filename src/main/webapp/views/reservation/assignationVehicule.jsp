@@ -18,17 +18,29 @@
         for (TypeCarburant t : types) typeById.put(t.getIdTypeCarburant(), t);
     }
 
-    Map<String, List<Reservation>> vehiculeToResa = new HashMap<>();
+    Map<String, Vehicule> vehiculeMap = new HashMap<>();
+    if (vehicules != null) {
+        for (Vehicule v : vehicules) vehiculeMap.put(v.getIdVehicule(), v);
+    }
+
+    java.text.SimpleDateFormat df = new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm");
+
+    // Grouper par véhicule ET par créneau horaire
+    // Clé: vehicleId + "|" + depTime + "|" + arrTime
+    Map<String, List<Reservation>> slotToResa = new LinkedHashMap<>();
     if (reservations != null && assignments != null) {
         for (Reservation r : reservations) {
             Vehicule v = assignments.get(r.getIdReservation());
             if (v != null) {
-                vehiculeToResa.computeIfAbsent(v.getIdVehicule(), k -> new ArrayList<>()).add(r);
+                java.sql.Timestamp dep = departureTimes != null ? departureTimes.get(r.getIdReservation()) : null;
+                java.sql.Timestamp arr = arrivalTimes != null ? arrivalTimes.get(r.getIdReservation()) : null;
+                String depStr = dep != null ? df.format(dep) : "-";
+                String arrStr = arr != null ? df.format(arr) : "-";
+                String key = v.getIdVehicule() + "|" + depStr + "|" + arrStr;
+                slotToResa.computeIfAbsent(key, k -> new ArrayList<>()).add(r);
             }
         }
     }
-
-    java.text.SimpleDateFormat df = new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm");
 %>
 <div class="container-fluid">
     <div class="d-flex align-items-center justify-content-between mb-4">
@@ -72,19 +84,27 @@
                             <th>Véhicule</th>
                             <th>Capacité</th>
                             <th>Carburant</th>
-                            <th>Date</th>
+                            <th>Départ Aéroport</th>
+                            <th>Retour Aéroport</th>
                         </tr>
                     </thead>
                     <tbody>
                         <%
                             boolean hasAssignments = false;
-                            if (vehicules != null) {
-                                for (Vehicule v : vehicules) {
-                                    List<Reservation> assignedResas = vehiculeToResa.get(v.getIdVehicule());
-                                    if (assignedResas != null && !assignedResas.isEmpty()) {
-                                        hasAssignments = true;
-                                        TypeCarburant t = typeById.get(v.getIdTypeCarburant());
-                                        String collapseId = "collapse-" + v.getIdVehicule();
+                            if (!slotToResa.isEmpty()) {
+                                hasAssignments = true;
+                                int count = 0;
+                                for (Map.Entry<String, List<Reservation>> entry : slotToResa.entrySet()) {
+                                    String key = entry.getKey();
+                                    List<Reservation> assignedResas = entry.getValue();
+                                    String[] parts = key.split("\\|");
+                                    String vId = parts[0];
+                                    String depTime = parts[1];
+                                    String arrTime = parts[2];
+                                    
+                                    Vehicule v = vehiculeMap.get(vId);
+                                    TypeCarburant t = v != null ? typeById.get(v.getIdTypeCarburant()) : null;
+                                    String collapseId = "collapse-" + (count++);
                         %>
                         <tr class="bg-white">
                             <td class="text-center">
@@ -94,17 +114,18 @@
                                     <i class="fas fa-plus"></i>
                                 </button>
                             </td>
-                            <td><span class="fw-bold text-primary"><%= v.getIdVehicule() %></span></td>
-                            <td><%= v.getNbrPlace() != null ? v.getNbrPlace() : "-" %></td>
+                            <td><span class="fw-bold text-primary"><%= vId %></span></td>
+                            <td><%= v != null && v.getNbrPlace() != null ? v.getNbrPlace() : "-" %></td>
                             <td>
                                 <span class="badge bg-indigo-soft text-primary">
                                     <i class="fas fa-gas-pump me-1"></i><%= t != null ? t.getLibelle() : "-" %>
                                 </span>
                             </td>
-                            <td><%= selectedDate != null ? selectedDate : "-" %></td>
+                            <td><%= depTime %></td>
+                            <td><%= arrTime %></td>
                         </tr>
                         <tr class="collapse" id="<%= collapseId %>">
-                            <td colspan="5" class="p-0">
+                            <td colspan="6" class="p-0">
                                 <div class="bg-light p-3 border-top border-bottom">
                                     <table class="table table-sm table-bordered bg-white mb-0 shadow-sm">
                                         <thead class="table-secondary small">
@@ -113,23 +134,17 @@
                                                 <th>Client</th>
                                                 <th>Passagers</th>
                                                 <th>Date Resa</th>
-                                                <th>Départ Aéroport</th>
-                                                <th>Retour Aéroport</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             <%
                                                 for (Reservation r : assignedResas) {
-                                                    java.sql.Timestamp dep = departureTimes != null ? departureTimes.get(r.getIdReservation()) : null;
-                                                    java.sql.Timestamp arr = arrivalTimes != null ? arrivalTimes.get(r.getIdReservation()) : null;
                                             %>
                                             <tr class="small">
                                                 <td>#<%= r.getIdReservation() %></td>
                                                 <td><%= r.getIdClient() %></td>
                                                 <td><%= r.getNbrPassager() %></td>
                                                 <td><%= r.getDateResa() != null ? df.format(r.getDateResa()) : "-" %></td>
-                                                <td><%= dep != null ? df.format(dep) : "-" %></td>
-                                                <td><%= arr != null ? df.format(arr) : "-" %></td>
                                             </tr>
                                             <% } %>
                                         </tbody>
@@ -138,13 +153,12 @@
                             </td>
                         </tr>
                         <%
-                                    }
                                 }
                             }
                             if (!hasAssignments) {
                         %>
                         <tr>
-                            <td colspan="5" class="text-center py-5">
+                            <td colspan="6" class="text-center py-5">
                                 <div class="text-muted">
                                     <i class="fas fa-calendar-check fa-3x mb-3 opacity-25"></i>
                                     <p class="mb-0">Aucun véhicule n'a de réservation pour cette date.</p>
