@@ -521,10 +521,30 @@ public class ReservationController {
             Map<String, Map<String, Distance>> distanceMatrix, Parametre param) {
         
         Map<String, Map<String, java.sql.Timestamp>> detailedTimes = new HashMap<>();
+        
+        // Grouper les réservations par véhicule et créneau horaire
+        Map<String, List<Reservation>> vehicleTours = grouperReservationsParVehicule(reservations, assignments);
+        
+        // Calculer les heures détaillées pour chaque tournée
+        for (Map.Entry<String, List<Reservation>> entry : vehicleTours.entrySet()) {
+            String key = entry.getKey();
+            List<Reservation> tour = entry.getValue();
+            
+            if (!tour.isEmpty()) {
+                Map<String, java.sql.Timestamp> times = calculerHeuresTournée(tour, hotelMap, distanceMatrix, param);
+                detailedTimes.put(key, times);
+            }
+        }
+        
+        return detailedTimes;
+    }
+
+    private Map<String, List<Reservation>> grouperReservationsParVehicule(List<Reservation> reservations, 
+            Map<String, Vehicule> assignments) {
+        
+        Map<String, List<Reservation>> vehicleTours = new HashMap<>();
         java.text.SimpleDateFormat df = new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm");
         
-        // Grouper par véhicule et par créneau horaire
-        Map<String, List<Reservation>> vehicleTours = new HashMap<>();
         for (Reservation r : reservations) {
             Vehicule v = assignments.get(r.getIdReservation());
             if (v != null && r.getDateResa() != null) {
@@ -534,88 +554,122 @@ public class ReservationController {
             }
         }
         
-        // Calculer les heures détaillées pour chaque tournée
-        for (Map.Entry<String, List<Reservation>> entry : vehicleTours.entrySet()) {
-            String key = entry.getKey();
-            List<Reservation> tour = entry.getValue();
+        return vehicleTours;
+    }
+
+    private Map<String, java.sql.Timestamp> calculerHeuresTournée(List<Reservation> tour, 
+            Map<String, Hotel> hotelMap, Map<String, Map<String, Distance>> distanceMatrix, Parametre param) {
+        
+        Map<String, java.sql.Timestamp> times = new HashMap<>();
+        
+        // Obtenir l'heure de départ de la première réservation
+        Reservation firstResa = tour.get(0);
+        Timestamp currentTime = firstResa.getDateResa();
+        
+        // Calculer l'ordre de la tournée et les heures
+        List<Reservation> orderedTour = calculerOrdreOptimal(tour, hotelMap, distanceMatrix);
+        calculerHeuresSegments(orderedTour, hotelMap, distanceMatrix, param, currentTime, times);
+        calculerHeureRetour(orderedTour, hotelMap, distanceMatrix, param, times);
+        
+        return times;
+    }
+
+    private List<Reservation> calculerOrdreOptimal(List<Reservation> tour, 
+            Map<String, Hotel> hotelMap, Map<String, Map<String, Distance>> distanceMatrix) {
+        
+        List<Reservation> orderedTour = new ArrayList<>();
+        String currentLieu = "LIEU001";
+        List<Reservation> remainingResa = new ArrayList<>(tour);
+        
+        while (!remainingResa.isEmpty()) {
+            Reservation nextResa = trouverProchainHotel(remainingResa, currentLieu, hotelMap, distanceMatrix);
             
-            Map<String, java.sql.Timestamp> times = new HashMap<>();
-            
-            if (tour.isEmpty()) continue;
-            
-            // Obtenir l'heure de départ de la première réservation
-            Reservation firstResa = tour.get(0);
-            Timestamp currentTime = firstResa.getDateResa();
-            
-            // Calculer l'ordre de la tournée
-            List<Reservation> orderedTour = new ArrayList<>();
-            String currentLieu = "LIEU001";
-            List<Reservation> remainingResa = new ArrayList<>(tour);
-            
-            while (!remainingResa.isEmpty()) {
-                Reservation nextResa = null;
-                BigDecimal minDistance = BigDecimal.valueOf(Double.MAX_VALUE);
-                
-                for (Reservation r : remainingResa) {
-                    Hotel h = hotelMap.get(r.getIdHotel());
-                    if (h != null) {
-                        Distance d = getDistance(distanceMatrix, currentLieu, h.getIdLieu());
-                        if (d != null && d.getKilometre().compareTo(minDistance) < 0) {
-                            minDistance = d.getKilometre();
-                            nextResa = r;
-                        }
-                    }
-                }
-                
-                if (nextResa != null) {
-                    orderedTour.add(nextResa);
-                    
-                    // Heure de départ vers cet hôtel
-                    times.put(nextResa.getIdReservation() + "_departure", currentTime);
-                    
-                    // Calculer le temps de trajet jusqu'à cet hôtel
-                    Hotel h = hotelMap.get(nextResa.getIdHotel());
-                    if (h != null && param != null && param.getVitesseMoyenne() != null) {
-                        Distance d = getDistance(distanceMatrix, currentLieu, h.getIdLieu());
-                        if (d != null) {
-                            BigDecimal travelTimeHours = d.getKilometre().divide(param.getVitesseMoyenne(), 4, RoundingMode.HALF_UP);
-                            long travelTimeMs = (long) (travelTimeHours.doubleValue() * 3600000L);
-                            currentTime = new Timestamp(currentTime.getTime() + travelTimeMs);
-                        }
-                    }
-                    
-                    // Heure d'arrivée à cet hôtel
-                    times.put(nextResa.getIdReservation() + "_arrival", currentTime);
-                    
-                    currentLieu = h.getIdLieu();
-                    remainingResa.remove(nextResa);
-                } else {
-                    break;
-                }
+            if (nextResa != null) {
+                orderedTour.add(nextResa);
+                Hotel h = hotelMap.get(nextResa.getIdHotel());
+                currentLieu = h.getIdLieu();
+                remainingResa.remove(nextResa);
+            } else {
+                break;
             }
-            
-            // Retour à l'aéroport depuis le dernier hôtel
-            if (!orderedTour.isEmpty()) {
-                Reservation lastResa = orderedTour.get(orderedTour.size() - 1);
-                Hotel lastHotel = hotelMap.get(lastResa.getIdHotel());
-                
-                // Heure de départ du dernier hôtel
-                times.put("return_departure", currentTime);
-                
-                if (lastHotel != null && param != null && param.getVitesseMoyenne() != null) {
-                    Distance d = getDistance(distanceMatrix, currentLieu, "LIEU001");
-                    if (d != null) {
-                        BigDecimal travelTimeHours = d.getKilometre().divide(param.getVitesseMoyenne(), 4, RoundingMode.HALF_UP);
-                        long travelTimeMs = (long) (travelTimeHours.doubleValue() * 3600000L);
-                        currentTime = new Timestamp(currentTime.getTime() + travelTimeMs);
-                    }
-                }
-                times.put("return_arrival", currentTime);
-            }
-            
-            detailedTimes.put(key, times);
         }
         
-        return detailedTimes;
+        return orderedTour;
+    }
+
+    private Reservation trouverProchainHotel(List<Reservation> remainingResa, String currentLieu,
+            Map<String, Hotel> hotelMap, Map<String, Map<String, Distance>> distanceMatrix) {
+        
+        Reservation nextResa = null;
+        BigDecimal minDistance = BigDecimal.valueOf(Double.MAX_VALUE);
+        
+        for (Reservation r : remainingResa) {
+            Hotel h = hotelMap.get(r.getIdHotel());
+            if (h != null) {
+                Distance d = getDistance(distanceMatrix, currentLieu, h.getIdLieu());
+                if (d != null && d.getKilometre().compareTo(minDistance) < 0) {
+                    minDistance = d.getKilometre();
+                    nextResa = r;
+                }
+            }
+        }
+        
+        return nextResa;
+    }
+
+    private void calculerHeuresSegments(List<Reservation> orderedTour, 
+            Map<String, Hotel> hotelMap, Map<String, Map<String, Distance>> distanceMatrix, 
+            Parametre param, Timestamp currentTime, Map<String, java.sql.Timestamp> times) {
+        
+        String currentLieu = "LIEU001";
+        
+        for (Reservation nextResa : orderedTour) {
+            // Heure de départ vers cet hôtel
+            times.put(nextResa.getIdReservation() + "_departure", currentTime);
+            
+            // Calculer le temps de trajet jusqu'à cet hôtel
+            Hotel h = hotelMap.get(nextResa.getIdHotel());
+            if (h != null && param != null && param.getVitesseMoyenne() != null) {
+                Distance d = getDistance(distanceMatrix, currentLieu, h.getIdLieu());
+                if (d != null) {
+                    BigDecimal travelTimeHours = d.getKilometre().divide(param.getVitesseMoyenne(), 4, RoundingMode.HALF_UP);
+                    long travelTimeMs = (long) (travelTimeHours.doubleValue() * 3600000L);
+                    currentTime = new Timestamp(currentTime.getTime() + travelTimeMs);
+                }
+            }
+            
+            // Heure d'arrivée à cet hôtel
+            times.put(nextResa.getIdReservation() + "_arrival", currentTime);
+            
+            currentLieu = h.getIdLieu();
+        }
+    }
+
+    private void calculerHeureRetour(List<Reservation> orderedTour, 
+            Map<String, Hotel> hotelMap, Map<String, Map<String, Distance>> distanceMatrix, 
+            Parametre param, Map<String, java.sql.Timestamp> times) {
+        
+        if (orderedTour.isEmpty()) return;
+        
+        Reservation lastResa = orderedTour.get(orderedTour.size() - 1);
+        Hotel lastHotel = hotelMap.get(lastResa.getIdHotel());
+        
+        if (lastHotel == null) return;
+        
+        // Heure de départ du dernier hôtel
+        Timestamp currentTime = times.get(lastResa.getIdReservation() + "_arrival");
+        times.put("return_departure", currentTime);
+        
+        // Calculer le temps de retour à l'aéroport
+        if (param != null && param.getVitesseMoyenne() != null) {
+            Distance d = getDistance(distanceMatrix, lastHotel.getIdLieu(), "LIEU001");
+            if (d != null) {
+                BigDecimal travelTimeHours = d.getKilometre().divide(param.getVitesseMoyenne(), 4, RoundingMode.HALF_UP);
+                long travelTimeMs = (long) (travelTimeHours.doubleValue() * 3600000L);
+                currentTime = new Timestamp(currentTime.getTime() + travelTimeMs);
+            }
+        }
+        
+        times.put("return_arrival", currentTime);
     }
 }
