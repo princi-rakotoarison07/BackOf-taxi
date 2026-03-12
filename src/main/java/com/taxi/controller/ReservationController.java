@@ -136,13 +136,17 @@ public class ReservationController {
             Parametre currentParam = (parametres != null && !parametres.isEmpty()) ? parametres.get(0) : null;
 
             List<Reservation> filtered = filtrerReservations(allReservations, date);
-            // Trier par date de réservation
+            // Trier d'abord par date de réservation (plus récent en premier), puis par nombre de passagers (plus grand en premier)
             filtered.sort((a, b) -> {
                 if (a.getDateResa() == null)
                     return 1;
                 if (b.getDateResa() == null)
                     return -1;
-                return a.getDateResa().compareTo(b.getDateResa());
+                int dateCompare = b.getDateResa().compareTo(a.getDateResa());
+                if (dateCompare != 0) {
+                    return dateCompare;
+                }
+                return b.getNbrPassager().compareTo(a.getNbrPassager());
             });
 
             Map<String, TypeCarburant> typeById = construireMapType(types);
@@ -231,7 +235,18 @@ public class ReservationController {
 
         for (Timestamp t : sortedTimes) {
             List<Reservation> group = groupedByTime.get(t);
-            group.sort((a, b) -> b.getNbrPassager().compareTo(a.getNbrPassager()));
+            // Trier d'abord par date de réservation (plus récent en premier), puis par nombre de passagers (plus grand en premier)
+            group.sort((a, b) -> {
+                if (a.getDateResa() == null)
+                    return 1;
+                if (b.getDateResa() == null)
+                    return -1;
+                int dateCompare = b.getDateResa().compareTo(a.getDateResa());
+                if (dateCompare != 0) {
+                    return dateCompare;
+                }
+                return b.getNbrPassager().compareTo(a.getNbrPassager());
+            });
 
             Map<Vehicule, Integer> remainingCapacity = new HashMap<>();
             for (Vehicule v : available) {
@@ -313,6 +328,7 @@ public class ReservationController {
             Map<String, TypeCarburant> typeById) {
         Vehicule best = null;
         int bestScoreDiesel = -1;
+        int bestFillRate = -1; // Meilleur taux de remplissage (0-100)
         int bestDiff = Integer.MAX_VALUE;
 
         for (Vehicule v : available) {
@@ -323,11 +339,21 @@ public class ReservationController {
                 TypeCarburant t = typeById.get(v.getIdTypeCarburant());
                 int dieselScore = (t != null && t.getCode() != null && t.getCode().equalsIgnoreCase("D")) ? 1 : 0;
                 int diff = v.getNbrPlace() - r.getNbrPassager();
+                
+                // Calculer le taux de remplissage après cette réservation
+                int newOccupied = v.getNbrPlace() - (cap - r.getNbrPassager());
+                int fillRate = (newOccupied * 100) / v.getNbrPlace();
 
-                if (diff < bestDiff || (diff == bestDiff && dieselScore > bestScoreDiesel)) {
+                // Priorité 1: Meilleur taux de remplissage (plus proche de 100%)
+                // Priorité 2: Moins de places gaspillées (diff plus petit)
+                // Priorité 3: Diesel en cas d'égalité
+                if (fillRate > bestFillRate || 
+                    (fillRate == bestFillRate && diff < bestDiff) || 
+                    (fillRate == bestFillRate && diff == bestDiff && dieselScore > bestScoreDiesel)) {
                     best = v;
                     bestScoreDiesel = dieselScore;
                     bestDiff = diff;
+                    bestFillRate = fillRate;
                 }
             }
         }
