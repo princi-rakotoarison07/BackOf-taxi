@@ -109,5 +109,3 @@ CREATE TABLE token (
     token VARCHAR(255) NOT NULL UNIQUE,
     date_heure_expiration TIMESTAMP NOT NULL
 );
-
-

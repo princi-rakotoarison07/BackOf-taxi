@@ -308,6 +308,9 @@
         <a href="${pageContext.request.contextPath}/reservation/assignation" class="nav-link <%= request.getRequestURI().contains("reservation/assignation") || request.getServletPath().contains("reservationAssignation.jsp") ? "active" : "" %>">
             <i class="fas fa-tasks"></i> Assignation
         </a>
+        <a href="${pageContext.request.contextPath}/trajet/list" class="nav-link <%= request.getRequestURI().contains("trajet/list") || request.getServletPath().contains("trajet/list.jsp") ? "active" : "" %>">
+            <i class="fas fa-route"></i> Trajets
+        </a>
         <a href="${pageContext.request.contextPath}/vehicule/list" class="nav-link <%= request.getRequestURI().contains("vehicule/list") ? "active" : "" %>">
             <i class="fas fa-list"></i> Liste Véhicules
         </a>

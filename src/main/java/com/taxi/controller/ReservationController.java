@@ -18,9 +18,10 @@ import com.taxi.model.Hotel;
 import com.taxi.model.Distance;
 import com.taxi.model.Parametre;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.Set;
 import java.math.RoundingMode;
 import java.math.BigDecimal;
 
@@ -131,34 +132,67 @@ public class ReservationController {
         return matrix;
     }
 
+    /**
+     * Assigne les véhicules aux réservations en utilisant une fenêtre d'attente :
+     * toutes les réservations dont l'heure se situe dans [t0, t0 + tempsAttente]
+     * sont regroupées et peuvent partir ensemble.
+     * - 1 résa dans la fenêtre  → départ immédiat à t0.
+     * - N resas dans la fenêtre → départ à la dernière heure de résa ≤ t0 + tempsAttente.
+     */
     private Map<String, Vehicule> assignerVehicules(List<Reservation> reservations, List<Vehicule> vehicules,
             Map<String, TypeCarburant> typeById, Map<String, Hotel> hotelMap,
             Map<String, Map<String, Distance>> distanceMatrix, Parametre param) {
         Map<String, Vehicule> assignments = new HashMap<>();
         List<Vehicule> available = new ArrayList<>(vehicules);
 
-        // Grouper les réservations par date/heure exacte (tronqué à la minute)
-        Map<Timestamp, List<Reservation>> groupedByTime = new HashMap<>();
-        for (Reservation r : reservations) {
-            if (r.getDateResa() == null)
-                continue;
-            // Tronquer à la minute pour le groupement
-            long timeMs = r.getDateResa().getTime();
-            Timestamp truncated = new Timestamp((timeMs / 60000L) * 60000L);
-            groupedByTime.computeIfAbsent(truncated, k -> new ArrayList<>()).add(r);
+        // Durée de la fenêtre d'attente en ms (issue de parametre.temps_attente en minutes)
+        long waitWindowMs = 0L;
+        if (param != null && param.getTempsAttente() != null && param.getTempsAttente() > 0) {
+            waitWindowMs = param.getTempsAttente() * 60_000L;
         }
 
-        // Trier les groupes par temps
-        List<Timestamp> sortedTimes = new ArrayList<>(groupedByTime.keySet());
-        Collections.sort(sortedTimes);
+        // Trier les réservations par heure de départ croissante
+        List<Reservation> sorted = new ArrayList<>(reservations);
+        sorted.sort((a, b) -> {
+            if (a.getDateResa() == null) return -1;
+            if (b.getDateResa() == null) return 1;
+            return a.getDateResa().compareTo(b.getDateResa());
+        });
 
         Map<Vehicule, Timestamp> nextFreeTime = new HashMap<>();
         for (Vehicule v : available) {
             nextFreeTime.put(v, new Timestamp(0));
         }
 
-        for (Timestamp t : sortedTimes) {
-            List<Reservation> group = groupedByTime.get(t);
+        Set<String> processed = new HashSet<>();
+
+        for (Reservation anchor : sorted) {
+            if (processed.contains(anchor.getIdReservation())) continue;
+            if (anchor.getDateResa() == null) continue;
+
+            Timestamp t0 = anchor.getDateResa();
+            Timestamp windowEnd = new Timestamp(t0.getTime() + waitWindowMs);
+
+            // Collecter toutes les réservations dans la fenêtre [t0, t0+waitWindow]
+            List<Reservation> group = new ArrayList<>();
+            for (Reservation r : sorted) {
+                if (processed.contains(r.getIdReservation())) continue;
+                if (r.getDateResa() == null) continue;
+                if (!r.getDateResa().before(t0) && !r.getDateResa().after(windowEnd)) {
+                    group.add(r);
+                }
+            }
+
+            // Heure de départ réelle du groupe
+            Timestamp departureTime = t0;
+            if (group.size() > 1) {
+                Timestamp latest = t0;
+                for (Reservation r : group) {
+                    if (r.getDateResa().after(latest)) latest = r.getDateResa();
+                }
+                departureTime = latest;
+            }
+
             group.sort((a, b) -> b.getNbrPassager().compareTo(a.getNbrPassager()));
 
             Map<Vehicule, Integer> remainingCapacity = new HashMap<>();
@@ -166,26 +200,26 @@ public class ReservationController {
                 remainingCapacity.put(v, v.getNbrPlace() != null ? v.getNbrPlace() : 0);
             }
 
-            // On garde trace des réservations assignées à chaque véhicule pour ce groupe
             Map<Vehicule, List<Reservation>> assignedToVehicule = new HashMap<>();
+            final Timestamp dTime = departureTime;
 
             for (Reservation r : group) {
-                Vehicule best = trouverMeilleurVehiculePourGroupe(r, available, remainingCapacity, nextFreeTime, t,
-                        typeById);
+                Vehicule best = trouverMeilleurVehiculePourGroupe(r, available, remainingCapacity, nextFreeTime,
+                        dTime, typeById);
                 if (best != null) {
                     assignments.put(r.getIdReservation(), best);
                     remainingCapacity.put(best, remainingCapacity.get(best) - r.getNbrPassager());
                     assignedToVehicule.computeIfAbsent(best, k -> new ArrayList<>()).add(r);
                 }
+                processed.add(r.getIdReservation());
             }
 
-            // Après avoir assigné le groupe, on met à jour nextFreeTime pour les véhicules
-            // utilisés
+            // Mettre à jour nextFreeTime pour les véhicules utilisés dans ce groupe
             for (Map.Entry<Vehicule, List<Reservation>> entry : assignedToVehicule.entrySet()) {
                 Vehicule v = entry.getKey();
                 List<Reservation> tour = entry.getValue();
                 long durationMs = calculerDureeTournee(tour, hotelMap, distanceMatrix, param);
-                nextFreeTime.put(v, new Timestamp(t.getTime() + durationMs));
+                nextFreeTime.put(v, new Timestamp(dTime.getTime() + durationMs));
             }
         }
 
@@ -269,13 +303,56 @@ public class ReservationController {
                 || param.getVitesseMoyenne().compareTo(BigDecimal.ZERO) <= 0)
             return;
 
-        // Grouper par véhicule et heure pour calculer les tournées
+        // Recalculer les fenêtres d'attente pour obtenir l'heure de départ réelle
+        long waitWindowMs = (param.getTempsAttente() != null && param.getTempsAttente() > 0)
+                ? param.getTempsAttente() * 60_000L : 0L;
+
+        // Trier par heure
+        List<Reservation> sorted = new ArrayList<>(reservations);
+        sorted.sort((a, b) -> {
+            if (a.getDateResa() == null) return -1;
+            if (b.getDateResa() == null) return 1;
+            return a.getDateResa().compareTo(b.getDateResa());
+        });
+
+        // Calculer l'heure de départ réelle par réservation (via la fenêtre d'attente)
+        Map<String, Timestamp> realDeparture = new HashMap<>();
+        Set<String> processed = new HashSet<>();
+        for (Reservation anchor : sorted) {
+            if (processed.contains(anchor.getIdReservation())) continue;
+            if (anchor.getDateResa() == null) continue;
+            Timestamp t0 = anchor.getDateResa();
+            Timestamp windowEnd = new Timestamp(t0.getTime() + waitWindowMs);
+            List<Reservation> window = new ArrayList<>();
+            for (Reservation r : sorted) {
+                if (processed.contains(r.getIdReservation())) continue;
+                if (r.getDateResa() == null) continue;
+                if (!r.getDateResa().before(t0) && !r.getDateResa().after(windowEnd)) {
+                    window.add(r);
+                }
+            }
+            Timestamp dep = t0;
+            if (window.size() > 1) {
+                Timestamp latest = t0;
+                for (Reservation r : window) {
+                    if (r.getDateResa().after(latest)) latest = r.getDateResa();
+                }
+                dep = latest;
+            }
+            for (Reservation r : window) {
+                realDeparture.put(r.getIdReservation(), dep);
+                processed.add(r.getIdReservation());
+            }
+        }
+
+        // Grouper par véhicule et heure de départ réelle pour calculer les tournées
         Map<Vehicule, Map<Timestamp, List<Reservation>>> tournées = new HashMap<>();
         for (Reservation r : reservations) {
             Vehicule v = assignments.get(r.getIdReservation());
-            if (v != null && r.getDateResa() != null) {
+            Timestamp dep = realDeparture.getOrDefault(r.getIdReservation(), r.getDateResa());
+            if (v != null && dep != null) {
                 tournées.computeIfAbsent(v, k -> new HashMap<>())
-                        .computeIfAbsent(r.getDateResa(), k -> new ArrayList<>())
+                        .computeIfAbsent(dep, k -> new ArrayList<>())
                         .add(r);
             }
         }

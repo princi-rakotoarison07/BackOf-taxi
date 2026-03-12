@@ -16,10 +16,11 @@ import java.sql.Timestamp;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import com.taxi.model.Hotel;
 import com.taxi.model.Distance;
 import com.taxi.model.Parametre;
@@ -144,26 +145,52 @@ public class VehiculeController {
             Map<String, Map<String, Distance>> distanceMatrix, Parametre param) {
         Map<Vehicule, List<Tournee>> planning = new HashMap<>();
 
-        // Grouper les réservations par date/heure exacte (tronqué à la minute)
-        Map<Timestamp, List<Reservation>> groupedByTime = new HashMap<>();
-        for (Reservation r : reservations) {
-            if (r.getDateResa() == null)
-                continue;
-            long timeMs = r.getDateResa().getTime();
-            Timestamp truncated = new Timestamp((timeMs / 60000L) * 60000L);
-            groupedByTime.computeIfAbsent(truncated, k -> new ArrayList<>()).add(r);
-        }
+        // Durée de la fenêtre d'attente en ms
+        long waitWindowMs = (param != null && param.getTempsAttente() != null && param.getTempsAttente() > 0)
+                ? param.getTempsAttente() * 60_000L : 0L;
 
-        List<Timestamp> sortedTimes = new ArrayList<>(groupedByTime.keySet());
-        Collections.sort(sortedTimes);
+        // Trier les réservations par heure croissante
+        List<Reservation> sorted = new ArrayList<>(reservations);
+        sorted.sort((a, b) -> {
+            if (a.getDateResa() == null) return -1;
+            if (b.getDateResa() == null) return 1;
+            return a.getDateResa().compareTo(b.getDateResa());
+        });
 
         Map<Vehicule, Timestamp> nextFreeTime = new HashMap<>();
         for (Vehicule v : vehicules) {
             nextFreeTime.put(v, new Timestamp(0));
         }
 
-        for (Timestamp t : sortedTimes) {
-            List<Reservation> group = groupedByTime.get(t);
+        Set<String> processed = new HashSet<>();
+
+        for (Reservation anchor : sorted) {
+            if (processed.contains(anchor.getIdReservation())) continue;
+            if (anchor.getDateResa() == null) continue;
+
+            Timestamp t0        = anchor.getDateResa();
+            Timestamp windowEnd = new Timestamp(t0.getTime() + waitWindowMs);
+
+            // Fenêtre d'attente
+            List<Reservation> group = new ArrayList<>();
+            for (Reservation r : sorted) {
+                if (processed.contains(r.getIdReservation())) continue;
+                if (r.getDateResa() == null) continue;
+                if (!r.getDateResa().before(t0) && !r.getDateResa().after(windowEnd)) {
+                    group.add(r);
+                }
+            }
+
+            // Heure de départ réelle du groupe
+            Timestamp departureTime = t0;
+            if (group.size() > 1) {
+                Timestamp latest = t0;
+                for (Reservation r : group) {
+                    if (r.getDateResa().after(latest)) latest = r.getDateResa();
+                }
+                departureTime = latest;
+            }
+
             group.sort((a, b) -> b.getNbrPassager().compareTo(a.getNbrPassager()));
 
             Map<Vehicule, Integer> remainingCapacity = new HashMap<>();
@@ -172,21 +199,23 @@ public class VehiculeController {
             }
 
             Map<Vehicule, List<Reservation>> assignedToVehicule = new HashMap<>();
+            final Timestamp dTime = departureTime;
             for (Reservation r : group) {
-                Vehicule best = trouverMeilleurVehicule(r, vehicules, remainingCapacity, nextFreeTime, t, typeById);
+                Vehicule best = trouverMeilleurVehicule(r, vehicules, remainingCapacity, nextFreeTime, dTime, typeById);
                 if (best != null) {
                     remainingCapacity.put(best, remainingCapacity.get(best) - r.getNbrPassager());
                     assignedToVehicule.computeIfAbsent(best, k -> new ArrayList<>()).add(r);
                 }
+                processed.add(r.getIdReservation());
             }
 
             for (Map.Entry<Vehicule, List<Reservation>> entry : assignedToVehicule.entrySet()) {
                 Vehicule v = entry.getKey();
                 List<Reservation> tourResas = entry.getValue();
                 long durationMs = calculerDureeTournee(tourResas, hotelMap, distanceMatrix, param);
-                Timestamp endTime = new Timestamp(t.getTime() + durationMs);
+                Timestamp endTime = new Timestamp(dTime.getTime() + durationMs);
                 nextFreeTime.put(v, endTime);
-                planning.computeIfAbsent(v, k -> new ArrayList<>()).add(new Tournee(t, endTime));
+                planning.computeIfAbsent(v, k -> new ArrayList<>()).add(new Tournee(dTime, endTime));
             }
         }
         return planning;
