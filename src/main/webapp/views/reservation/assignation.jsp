@@ -3,6 +3,7 @@
 <%@ page import="com.taxi.model.Reservation" %>
 <%@ page import="com.taxi.model.Vehicule" %>
 <%@ page import="com.taxi.model.TypeCarburant" %>
+<%@ page import="com.taxi.model.Hotel" %>
 <jsp:include page="../layout/header.jsp" />
 <%
     List<Reservation> reservations = (List<Reservation>) request.getAttribute("reservations");
@@ -11,6 +12,8 @@
     Map<String, java.sql.Timestamp> arrivalTimes = (Map<String, java.sql.Timestamp>) request.getAttribute("arrivalTimes");
     List<TypeCarburant> types = (List<TypeCarburant>) request.getAttribute("types");
     String selectedDate = (String) request.getAttribute("selectedDate");
+    List<Hotel> hotels = (List<Hotel>) request.getAttribute("hotels");
+    Map<String, Hotel> hotelMap = (Map<String, Hotel>) request.getAttribute("hotelMap");
     Map<String, TypeCarburant> typeById = new HashMap<>();
     if (types != null) {
         for (TypeCarburant t : types) typeById.put(t.getIdTypeCarburant(), t);
@@ -50,6 +53,7 @@
                             <th>Client</th>
                             <th>Pax</th>
                             <th>Date</th>
+                            <th>Hôtel</th>
                             <th>Véhicule</th>
                             <th>Capacité</th>
                             <th>Carburant</th>
@@ -68,12 +72,16 @@
                                     if (v != null) {
                                         t = typeById.get(v.getIdTypeCarburant());
                                     }
+                                    Hotel h = hotelMap != null ? hotelMap.get(r.getIdHotel()) : null;
                         %>
                         <tr>
                             <td class="ps-4 fw-bold">#<%= r.getIdReservation() %></td>
                             <td><%= r.getIdClient() %></td>
                             <td><%= r.getNbrPassager() %></td>
                             <td><%= r.getDateResa() != null ? df.format(r.getDateResa()) : "-" %></td>
+                            <td>
+                                <%= h != null ? h.getNomHotel() : r.getIdHotel() %>
+                            </td>
                             <td><%= v != null ? v.getIdVehicule() : "-" %></td>
                             <td><%= v != null && v.getNbrPlace() != null ? v.getNbrPlace() : "-" %></td>
                             <td>
@@ -89,7 +97,7 @@
                         <%      }
                             } else { %>
                         <tr>
-                            <td colspan="9" class="text-center py-5">
+                            <td colspan="10" class="text-center py-5">
                                 <p class="text-muted mb-0">Aucune donnée disponible pour cette date.</p>
                             </td>
                         </tr>

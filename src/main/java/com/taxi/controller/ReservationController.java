@@ -168,6 +168,14 @@ public class ReservationController {
             mv.addObject("departureTimes", departureTimes);
             mv.addObject("arrivalTimes", arrivalTimes);
             mv.addObject("selectedDate", date);
+            mv.addObject("hotels", hotels);
+            mv.addObject("hotelMap", hotelMap);
+            
+            // Calculer l'ordre des tournées et les heures détaillées pour l'affichage
+            Map<String, List<Reservation>> tourOrders = calculerOrdreTournées(filtered, assignments, hotelMap, distanceMatrix);
+            Map<String, Map<String, java.sql.Timestamp>> detailedTimes = calculerHorairesDetailles(filtered, assignments, hotelMap, distanceMatrix, currentParam);
+            mv.addObject("tourOrders", tourOrders);
+            mv.addObject("detailedTimes", detailedTimes);
         }
     }
 
@@ -447,5 +455,167 @@ public class ReservationController {
             return matrix.get(to).get(from);
         }
         return null;
+    }
+
+    private Map<String, List<Reservation>> calculerOrdreTournées(List<Reservation> reservations, 
+            Map<String, Vehicule> assignments, Map<String, Hotel> hotelMap, 
+            Map<String, Map<String, Distance>> distanceMatrix) {
+        
+        Map<String, List<Reservation>> tourOrders = new HashMap<>();
+        java.text.SimpleDateFormat df = new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm");
+        
+        // Grouper par véhicule et par créneau horaire
+        Map<String, List<Reservation>> vehicleTours = new HashMap<>();
+        for (Reservation r : reservations) {
+            Vehicule v = assignments.get(r.getIdReservation());
+            if (v != null && r.getDateResa() != null) {
+                // Utiliser le même format que dans la vue
+                String timeStr = df.format(r.getDateResa());
+                String key = v.getIdVehicule() + "|" + timeStr;
+                vehicleTours.computeIfAbsent(key, k -> new ArrayList<>()).add(r);
+            }
+        }
+        
+        // Calculer l'ordre pour chaque tournée
+        for (Map.Entry<String, List<Reservation>> entry : vehicleTours.entrySet()) {
+            String key = entry.getKey();
+            List<Reservation> tour = entry.getValue();
+            
+            List<Reservation> orderedTour = new ArrayList<>();
+            String currentLieu = "LIEU001"; // Commence à l'aéroport
+            List<Reservation> remainingResa = new ArrayList<>(tour);
+            
+            while (!remainingResa.isEmpty()) {
+                Reservation nextResa = null;
+                BigDecimal minDistance = BigDecimal.valueOf(Double.MAX_VALUE);
+                
+                for (Reservation r : remainingResa) {
+                    Hotel h = hotelMap.get(r.getIdHotel());
+                    if (h != null) {
+                        Distance d = getDistance(distanceMatrix, currentLieu, h.getIdLieu());
+                        if (d != null && d.getKilometre().compareTo(minDistance) < 0) {
+                            minDistance = d.getKilometre();
+                            nextResa = r;
+                        }
+                    }
+                }
+                
+                if (nextResa != null) {
+                    orderedTour.add(nextResa);
+                    Hotel h = hotelMap.get(nextResa.getIdHotel());
+                    currentLieu = h.getIdLieu();
+                    remainingResa.remove(nextResa);
+                } else {
+                    break;
+                }
+            }
+            
+            tourOrders.put(key, orderedTour);
+        }
+        
+        return tourOrders;
+    }
+
+    private Map<String, Map<String, java.sql.Timestamp>> calculerHorairesDetailles(List<Reservation> reservations, 
+            Map<String, Vehicule> assignments, Map<String, Hotel> hotelMap, 
+            Map<String, Map<String, Distance>> distanceMatrix, Parametre param) {
+        
+        Map<String, Map<String, java.sql.Timestamp>> detailedTimes = new HashMap<>();
+        java.text.SimpleDateFormat df = new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm");
+        
+        // Grouper par véhicule et par créneau horaire
+        Map<String, List<Reservation>> vehicleTours = new HashMap<>();
+        for (Reservation r : reservations) {
+            Vehicule v = assignments.get(r.getIdReservation());
+            if (v != null && r.getDateResa() != null) {
+                String timeStr = df.format(r.getDateResa());
+                String key = v.getIdVehicule() + "|" + timeStr;
+                vehicleTours.computeIfAbsent(key, k -> new ArrayList<>()).add(r);
+            }
+        }
+        
+        // Calculer les heures détaillées pour chaque tournée
+        for (Map.Entry<String, List<Reservation>> entry : vehicleTours.entrySet()) {
+            String key = entry.getKey();
+            List<Reservation> tour = entry.getValue();
+            
+            Map<String, java.sql.Timestamp> times = new HashMap<>();
+            
+            if (tour.isEmpty()) continue;
+            
+            // Obtenir l'heure de départ de la première réservation
+            Reservation firstResa = tour.get(0);
+            Timestamp currentTime = firstResa.getDateResa();
+            
+            // Calculer l'ordre de la tournée
+            List<Reservation> orderedTour = new ArrayList<>();
+            String currentLieu = "LIEU001";
+            List<Reservation> remainingResa = new ArrayList<>(tour);
+            
+            while (!remainingResa.isEmpty()) {
+                Reservation nextResa = null;
+                BigDecimal minDistance = BigDecimal.valueOf(Double.MAX_VALUE);
+                
+                for (Reservation r : remainingResa) {
+                    Hotel h = hotelMap.get(r.getIdHotel());
+                    if (h != null) {
+                        Distance d = getDistance(distanceMatrix, currentLieu, h.getIdLieu());
+                        if (d != null && d.getKilometre().compareTo(minDistance) < 0) {
+                            minDistance = d.getKilometre();
+                            nextResa = r;
+                        }
+                    }
+                }
+                
+                if (nextResa != null) {
+                    orderedTour.add(nextResa);
+                    
+                    // Heure de départ vers cet hôtel
+                    times.put(nextResa.getIdReservation() + "_departure", currentTime);
+                    
+                    // Calculer le temps de trajet jusqu'à cet hôtel
+                    Hotel h = hotelMap.get(nextResa.getIdHotel());
+                    if (h != null && param != null && param.getVitesseMoyenne() != null) {
+                        Distance d = getDistance(distanceMatrix, currentLieu, h.getIdLieu());
+                        if (d != null) {
+                            BigDecimal travelTimeHours = d.getKilometre().divide(param.getVitesseMoyenne(), 4, RoundingMode.HALF_UP);
+                            long travelTimeMs = (long) (travelTimeHours.doubleValue() * 3600000L);
+                            currentTime = new Timestamp(currentTime.getTime() + travelTimeMs);
+                        }
+                    }
+                    
+                    // Heure d'arrivée à cet hôtel
+                    times.put(nextResa.getIdReservation() + "_arrival", currentTime);
+                    
+                    currentLieu = h.getIdLieu();
+                    remainingResa.remove(nextResa);
+                } else {
+                    break;
+                }
+            }
+            
+            // Retour à l'aéroport depuis le dernier hôtel
+            if (!orderedTour.isEmpty()) {
+                Reservation lastResa = orderedTour.get(orderedTour.size() - 1);
+                Hotel lastHotel = hotelMap.get(lastResa.getIdHotel());
+                
+                // Heure de départ du dernier hôtel
+                times.put("return_departure", currentTime);
+                
+                if (lastHotel != null && param != null && param.getVitesseMoyenne() != null) {
+                    Distance d = getDistance(distanceMatrix, currentLieu, "LIEU001");
+                    if (d != null) {
+                        BigDecimal travelTimeHours = d.getKilometre().divide(param.getVitesseMoyenne(), 4, RoundingMode.HALF_UP);
+                        long travelTimeMs = (long) (travelTimeHours.doubleValue() * 3600000L);
+                        currentTime = new Timestamp(currentTime.getTime() + travelTimeMs);
+                    }
+                }
+                times.put("return_arrival", currentTime);
+            }
+            
+            detailedTimes.put(key, times);
+        }
+        
+        return detailedTimes;
     }
 }
