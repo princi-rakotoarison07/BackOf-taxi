@@ -77,4 +77,17 @@ public class Vehicule extends Model {
         }
         throw new Exception("Impossible de générer l'ID Vehicule");
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Vehicule vehicule = (Vehicule) o;
+        return idVehicule != null ? idVehicule.equals(vehicule.idVehicule) : vehicule.idVehicule == null;
+    }
+
+    @Override
+    public int hashCode() {
+        return idVehicule != null ? idVehicule.hashCode() : 0;
+    }
 }
