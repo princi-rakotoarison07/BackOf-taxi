@@ -1,54 +1,50 @@
--- INSERT INTO lieuhotel (id_lieu, nom_lieu, ville) VALUES
--- ('LIEU001', 'Aéroport International d''Antananarivo', 'Antananarivo'),
--- ('LIEU002', 'Gare Routière de Soarano', 'Antananarivo'),
--- ('LIEU003', 'Stade Municipal de Mahamasina', 'Antananarivo'),
--- ('LIEU004', 'Jardin Botanique de Tsimbazaza', 'Antananarivo'),
--- ('LIEU005', 'Palais de la Reine', 'Antananarivo'),
--- ('LIEU006', 'Marché Analakely', 'Antananarivo'),
--- ('LIEU007', 'Lac Anosy', 'Antananarivo'),
--- ('LIEU008', 'Rova d''Antananarivo', 'Antananarivo'),
--- ('LIEU009', 'Parc Zoologique de Tsimbazaza', 'Antananarivo'),
--- ('LIEU010', 'Centre Commercial Acacia', 'Antananarivo');
+-- TYPE CARBURANT (typeenergie → type_carburant)
+INSERT INTO type_carburant (id_type_carburant, code, libelle) VALUES
+('TC0001', 'D', 'Diesel'),
+('TC0002', 'E', 'Essence'),
+('TC0003', 'El', 'Electrique'),
+('TC0004', 'H',  'Hybride');
 
+-- LIEUHOTEL (hotel.distanceaeroport indique la position, on crée des lieux)
+INSERT INTO lieuhotel (id_lieu, nom_lieu, ville) VALUES
+('LIEU001', 'Aéroport', 'Antananarivo'),
+('LIEU002', 'Zone Hotel A', 'Antananarivo'),
+('LIEU003', 'Zone Hotel B', 'Antananarivo'),
+('LIEU004', 'Zone Hotel C', 'Antananarivo');
 
--- INSERT INTO hotel (id_hotel, nom_hotel, id_lieu) VALUES
--- ('HOT001', 'Hotel Colbert Antananarivo', 'LIEU005'),
--- ('HOT002', 'Novotel Antananarivo', 'LIEU010'),
--- ('HOT003', 'Ibis Antananarivo', 'LIEU006'),
--- ('HOT004', 'Hotel Lokanga', 'LIEU008');
+-- HOTEL (hotel → hotel, lié aux lieux)
+INSERT INTO hotel (id_hotel, nom_hotel, id_lieu) VALUES
+('HOT001', 'Hotel A', 'LIEU002'),
+('HOT002', 'Hotel B', 'LIEU003'),
+('HOT003', 'Hotel C', 'LIEU004');
 
-
-
-INSERT INTO reservation (
-    id_reservation,
-    id_client,
-    nbr_passager,
-    id_hotel,
-    date_resa
-) VALUES
-('RES001', '4631', 11, 'HOT003', '2026-02-05 00:01'),
-('RES002', '4394', 1,  'HOT003', '2026-02-05 23:55'),
-('RES003', '8054', 2,  'HOT001', '2026-02-09 10:17'),
-('RES004', '1432', 4,  'HOT002', '2026-02-01 15:25'),
-('RES005', '7861', 4,  'HOT001', '2026-01-28 07:11'),
-('RES006', '3308', 5,  'HOT001', '2026-01-28 07:45'),
-('RES007', '4484', 13, 'HOT002', '2026-02-28 08:25'),
-('RES008', '9687', 8,  'HOT002', '2026-02-28 13:00'),
-('RES009', '6302', 7,  'HOT001', '2026-02-15 13:00'),
-('RES010', '8640', 1,  'HOT004', '2026-02-18 22:55');
-
--- Données pour la table paramètre
+-- PARAMETRE (clé/valeur → colonnes typées)
+-- AttenteMinute=30, VitesseKmh=50
 INSERT INTO parametre (id_parametre, vitesse_moyenne, temps_attente) VALUES
-('PARAM001', 40.00, 15),
-('PARAM002', 50.00, 10);
+('PARAM001', 50.00, 30);
 
--- Données pour la table vehicule
+-- DISTANCE (idhotelfrom/idhotelto → lieu_from/lieu_to)
+-- hotel 1=LIEU002, hotel 2=LIEU003, hotel 3=LIEU004
+-- + distances depuis aéroport (LIEU001) via distanceaeroport de chaque hotel
+INSERT INTO distance (id_distance, lieu_from, lieu_to, kilometre) VALUES
+('DIST001', 'LIEU001', 'LIEU002', 6.00),  -- Aéroport → Hotel A
+('DIST002', 'LIEU001', 'LIEU003', 5.00),  -- Aéroport → Hotel B
+('DIST003', 'LIEU001', 'LIEU004', 8.00),  -- Aéroport → Hotel C
+('DIST004', 'LIEU002', 'LIEU003', 3.00),  -- Hotel A → Hotel B
+('DIST005', 'LIEU002', 'LIEU004', 6.00),  -- Hotel A → Hotel C
+('DIST006', 'LIEU003', 'LIEU004', 3.00);  -- Hotel B → Hotel C
+
+-- VEHICULE (voiture → vehicule)
+-- V001=id2(Diesel/7pl), V002=id3(Diesel/8pl), V003=id4(Essence/15pl)
 INSERT INTO vehicule (id_vehicule, reference, nbr_place, id_type_carburant) VALUES
-('VH001', 'Toyota Hiace D1', 12, 'TC0001'),  -- Diesel 12 places
-('VH002', 'Toyota Hiace D2', 15, 'TC0001'),  -- Diesel 15 places
-('VH003', 'Toyota Coaster E1', 25, 'TC0002'), -- Essence 25 places
-('VH004', 'Mercedes Sprinter D3', 8, 'TC0001'), -- Diesel 8 places
-('VH005', 'Nissan Urvan E2', 6, 'TC0002'),   -- Essence 6 places
-('VH006', 'Toyota Hiace H1', 10, 'TC0004'),  -- Hybride 10 places
-('VH007', 'Tesla Bus El1', 20, 'TC0003');    -- Électrique 20 places
+('VH001', 'V001', 7,  'TC0001'),  -- Diesel
+('VH002', 'V002', 8,  'TC0001'),  -- Diesel
+('VH003', 'V003', 15, 'TC0002');  -- Essence
 
+-- RESERVATION
+-- dateheurearrivee → date_resa, idhotel mappé
+INSERT INTO reservation (id_reservation, id_client, nbr_passager, id_hotel, date_resa) VALUES
+('RES001', 'C001', 5,  'HOT003', '2026-03-04 08:00:00'),
+('RES002', 'C002', 10, 'HOT001', '2026-03-04 08:00:00'),
+('RES003', 'C005', 2,  'HOT002', '2026-03-04 08:00:00'),
+('RES004', 'C007', 4,  'HOT003', '2026-03-04 08:00:00');
