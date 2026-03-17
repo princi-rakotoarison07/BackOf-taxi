@@ -30,7 +30,6 @@ DELETE FROM distance;
 DELETE FROM hotel;
 DELETE FROM parametre;
 DELETE FROM lieuhotel;
-DELETE FROM token;
 
 -- Réinitialiser les séquences
 ALTER SEQUENCE seq_hotel      RESTART WITH 1;
@@ -146,6 +145,25 @@ INSERT INTO reservation (id_reservation, id_client, nbr_passager, id_hotel, date
 ('RES_T010', 'CLI_010',  2, 'HOT001', '2026-03-16 09:00:00'),
 ('RES_T011', 'CLI_011', 10, 'HOT002', '2026-03-16 09:05:00'),
 ('RES_T012', 'CLI_012',  4, 'HOT004', '2026-03-16 14:00:00');
+
+
+-- ────────────────────────────────────────────────────────────
+-- 9. Vérifications rapides après insertion
+-- ────────────────────────────────────────────────────────────
+-- Doit retourner 9 pour le 15/03/2026
+SELECT COUNT(*) AS nb_reservations_2026_03_15
+FROM reservation
+WHERE date_resa >= '2026-03-15 00:00:00'
+	AND date_resa <= '2026-03-15 23:59:59';
+
+-- Doit afficher 5 groupes attendus: 07:00, 08:00, 08:45, 13:00, 17:30
+SELECT to_char(date_trunc('minute', date_resa), 'YYYY-MM-DD HH24:MI') AS minute_resa,
+			 COUNT(*) AS nb_resa
+FROM reservation
+WHERE date_resa >= '2026-03-15 00:00:00'
+	AND date_resa <= '2026-03-15 23:59:59'
+GROUP BY date_trunc('minute', date_resa)
+ORDER BY minute_resa;
 
 
 -- ────────────────────────────────────────────────────────────
