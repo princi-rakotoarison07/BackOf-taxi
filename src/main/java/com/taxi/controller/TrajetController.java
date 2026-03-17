@@ -95,7 +95,18 @@ public class TrajetController {
         Set<String>    assigned  = new HashSet<>();          // ids réservations déjà traitées
         List<Vehicule> available = new ArrayList<>(vehicules);
         Map<Vehicule, Timestamp> nextFreeTime = new HashMap<>();
-        for (Vehicule v : available) nextFreeTime.put(v, new Timestamp(0));
+        Map<Vehicule, Integer> trajetCount = new HashMap<>();
+
+        Timestamp dayStart = sorted.isEmpty() || sorted.get(0).getDateResa() == null
+            ? new Timestamp(0)
+            : startOfDay(sorted.get(0).getDateResa());
+
+        // Chaque début de journée, tous les véhicules sont disponibles à 00:00
+        // et leur compteur de trajets est remis à 0.
+        for (Vehicule v : available) {
+            nextFreeTime.put(v, dayStart);
+            trajetCount.put(v, 0);
+        }
 
         for (int i = 0; i < sorted.size(); i++) {
             Reservation anchor = sorted.get(i);
@@ -127,14 +138,36 @@ public class TrajetController {
                 heureDepart = latest;
             }
 
-            // Assigner les véhicules au groupe
-            window.sort((a, b) -> b.getNbrPassager().compareTo(a.getNbrPassager()));
+            // Ordre de traitement des réservations regroupées:
+            // priorité à la réservation la plus ancienne, puis au plus grand groupe.
+            window.sort((a, b) -> {
+                Timestamp da = a.getDateResa();
+                Timestamp db = b.getDateResa();
+                int byDate;
+                if (da == null && db == null) {
+                    byDate = 0;
+                } else if (da == null) {
+                    byDate = 1;
+                } else if (db == null) {
+                    byDate = -1;
+                } else {
+                    byDate = da.compareTo(db);
+                }
+                if (byDate != 0) {
+                    return byDate;
+                }
+                Integer pa = a.getNbrPassager() != null ? a.getNbrPassager() : 0;
+                Integer pb = b.getNbrPassager() != null ? b.getNbrPassager() : 0;
+                return pb.compareTo(pa);
+            });
+
             Map<Vehicule, List<Reservation>> vehiculeGroup = new LinkedHashMap<>();
             Map<Vehicule, Integer> remainingCap = new HashMap<>();
             for (Vehicule v : available) remainingCap.put(v, v.getNbrPlace() != null ? v.getNbrPlace() : 0);
 
             for (Reservation r : window) {
-                Vehicule best = choisirVehicule(r, available, remainingCap, nextFreeTime, heureDepart, typeById);
+                Vehicule best = choisirVehicule(r, available, remainingCap, nextFreeTime, trajetCount,
+                        heureDepart, typeById);
                 if (best != null) {
                     remainingCap.put(best, remainingCap.get(best) - r.getNbrPassager());
                     vehiculeGroup.computeIfAbsent(best, k -> new ArrayList<>()).add(r);
@@ -152,6 +185,7 @@ public class TrajetController {
 
                 Timestamp heureRetour = new Timestamp(heureDepart.getTime() + travelMs);
                 nextFreeTime.put(v, heureRetour);
+                trajetCount.put(v, trajetCount.getOrDefault(v, 0) + 1);
 
                 trajets.add(new Trajet(v, heureDepart, heureRetour, km, tour));
             }
@@ -171,30 +205,86 @@ public class TrajetController {
             List<Vehicule> available,
             Map<Vehicule, Integer> remainingCap,
             Map<Vehicule, Timestamp> nextFreeTime,
+            Map<Vehicule, Integer> trajetCount,
             Timestamp departureTime,
             Map<String, TypeCarburant> typeById) {
 
-        Vehicule best = null;
-        int bestDiff  = Integer.MAX_VALUE;
-        int bestDiesel = -1;
-
+        List<Vehicule> candidates = new ArrayList<>();
         for (Vehicule v : available) {
             int cap      = remainingCap.getOrDefault(v, 0);
             Timestamp ft = nextFreeTime.getOrDefault(v, new Timestamp(0));
+            Integer pax = r.getNbrPassager() != null ? r.getNbrPassager() : 0;
 
-            if (cap >= r.getNbrPassager() && !ft.after(departureTime)) {
-                TypeCarburant tc   = typeById.get(v.getIdTypeCarburant());
-                int dieselScore    = (tc != null && "D".equalsIgnoreCase(tc.getCode())) ? 1 : 0;
-                int diff           = cap - r.getNbrPassager();
-
-                if (diff < bestDiff || (diff == bestDiff && dieselScore > bestDiesel)) {
-                    best       = v;
-                    bestDiff   = diff;
-                    bestDiesel = dieselScore;
-                }
+            if (cap >= pax && !ft.after(departureTime)) {
+                candidates.add(v);
             }
         }
+
+        if (candidates.isEmpty()) {
+            return null;
+        }
+
+        int minTrajets = Integer.MAX_VALUE;
+        for (Vehicule v : candidates) {
+            int cnt = trajetCount.getOrDefault(v, 0);
+            if (cnt < minTrajets) {
+                minTrajets = cnt;
+            }
+        }
+
+        // Priorité 1: prendre les véhicules avec le plus petit nombre de trajets,
+        // donc prioritairement ceux à 0 trajet en début de journée.
+        List<Vehicule> byUsage = new ArrayList<>();
+        for (Vehicule v : candidates) {
+            if (trajetCount.getOrDefault(v, 0) == minTrajets) {
+                byUsage.add(v);
+            }
+        }
+
+        Vehicule best = null;
+        int bestFuelPriority = Integer.MIN_VALUE;
+        int bestDiff = Integer.MAX_VALUE;
+        String bestId = null;
+
+        for (Vehicule v : byUsage) {
+            Integer pax = r.getNbrPassager() != null ? r.getNbrPassager() : 0;
+            int cap = remainingCap.getOrDefault(v, 0);
+            int diff = cap - pax;
+
+            TypeCarburant tc = typeById.get(v.getIdTypeCarburant());
+            int fuelPriority = getFuelPriority(tc != null ? tc.getCode() : null);
+            String currentId = v.getIdVehicule() != null ? v.getIdVehicule() : "";
+
+            // Priorité 2: à usage égal, prioriser le carburant
+            // Electrique > Diesel > Essence > autres.
+            if (fuelPriority > bestFuelPriority
+                    || (fuelPriority == bestFuelPriority && diff < bestDiff)
+                    || (fuelPriority == bestFuelPriority && diff == bestDiff
+                            && (bestId == null || currentId.compareTo(bestId) < 0))) {
+                best = v;
+                bestFuelPriority = fuelPriority;
+                bestDiff = diff;
+                bestId = currentId;
+            }
+        }
+
         return best;
+    }
+
+    private int getFuelPriority(String fuelCode) {
+        if (fuelCode == null) {
+            return 0;
+        }
+        if ("EL".equalsIgnoreCase(fuelCode)) {
+            return 3;
+        }
+        if ("D".equalsIgnoreCase(fuelCode)) {
+            return 2;
+        }
+        if ("E".equalsIgnoreCase(fuelCode)) {
+            return 1;
+        }
+        return 0;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -254,6 +344,16 @@ public class TrajetController {
         }
         if (matrix.containsKey(to)) return matrix.get(to).get(from);
         return null;
+    }
+
+    private Timestamp startOfDay(Timestamp ts) {
+        Calendar cal = Calendar.getInstance();
+        cal.setTimeInMillis(ts.getTime());
+        cal.set(Calendar.HOUR_OF_DAY, 0);
+        cal.set(Calendar.MINUTE, 0);
+        cal.set(Calendar.SECOND, 0);
+        cal.set(Calendar.MILLISECOND, 0);
+        return new Timestamp(cal.getTimeInMillis());
     }
 
     // ─────────────────────────────────────────────────────────────────────────

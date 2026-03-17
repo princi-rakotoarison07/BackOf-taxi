@@ -16,6 +16,7 @@ import java.sql.Timestamp;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -158,8 +159,13 @@ public class VehiculeController {
         });
 
         Map<Vehicule, Timestamp> nextFreeTime = new HashMap<>();
+        Map<Vehicule, Integer> trajetCount = new HashMap<>();
+        Timestamp dayStart = sorted.isEmpty() || sorted.get(0).getDateResa() == null
+                ? new Timestamp(0)
+                : startOfDay(sorted.get(0).getDateResa());
         for (Vehicule v : vehicules) {
-            nextFreeTime.put(v, new Timestamp(0));
+            nextFreeTime.put(v, dayStart);
+            trajetCount.put(v, 0);
         }
 
         Set<String> processed = new HashSet<>();
@@ -191,7 +197,26 @@ public class VehiculeController {
                 departureTime = latest;
             }
 
-            group.sort((a, b) -> b.getNbrPassager().compareTo(a.getNbrPassager()));
+            group.sort((a, b) -> {
+                Timestamp da = a.getDateResa();
+                Timestamp db = b.getDateResa();
+                int byDate;
+                if (da == null && db == null) {
+                    byDate = 0;
+                } else if (da == null) {
+                    byDate = 1;
+                } else if (db == null) {
+                    byDate = -1;
+                } else {
+                    byDate = da.compareTo(db);
+                }
+                if (byDate != 0) {
+                    return byDate;
+                }
+                Integer pa = a.getNbrPassager() != null ? a.getNbrPassager() : 0;
+                Integer pb = b.getNbrPassager() != null ? b.getNbrPassager() : 0;
+                return pb.compareTo(pa);
+            });
 
             Map<Vehicule, Integer> remainingCapacity = new HashMap<>();
             for (Vehicule v : vehicules) {
@@ -201,7 +226,8 @@ public class VehiculeController {
             Map<Vehicule, List<Reservation>> assignedToVehicule = new HashMap<>();
             final Timestamp dTime = departureTime;
             for (Reservation r : group) {
-                Vehicule best = trouverMeilleurVehicule(r, vehicules, remainingCapacity, nextFreeTime, dTime, typeById);
+                Vehicule best = trouverMeilleurVehicule(r, vehicules, remainingCapacity, nextFreeTime,
+                        trajetCount, dTime, typeById);
                 if (best != null) {
                     remainingCapacity.put(best, remainingCapacity.get(best) - r.getNbrPassager());
                     assignedToVehicule.computeIfAbsent(best, k -> new ArrayList<>()).add(r);
@@ -215,6 +241,7 @@ public class VehiculeController {
                 long durationMs = calculerDureeTournee(tourResas, hotelMap, distanceMatrix, param);
                 Timestamp endTime = new Timestamp(dTime.getTime() + durationMs);
                 nextFreeTime.put(v, endTime);
+                trajetCount.put(v, trajetCount.getOrDefault(v, 0) + 1);
                 planning.computeIfAbsent(v, k -> new ArrayList<>()).add(new Tournee(dTime, endTime));
             }
         }
@@ -222,28 +249,73 @@ public class VehiculeController {
     }
 
     private Vehicule trouverMeilleurVehicule(Reservation r, List<Vehicule> available,
-            Map<Vehicule, Integer> remainingCapacity, Map<Vehicule, Timestamp> nextFreeTime, Timestamp currentTime,
-            Map<String, TypeCarburant> typeById) {
-        Vehicule best = null;
-        int bestScoreDiesel = -1;
-        int bestDiff = Integer.MAX_VALUE;
-
+            Map<Vehicule, Integer> remainingCapacity, Map<Vehicule, Timestamp> nextFreeTime,
+            Map<Vehicule, Integer> trajetCount, Timestamp currentTime, Map<String, TypeCarburant> typeById) {
+        List<Vehicule> candidates = new ArrayList<>();
         for (Vehicule v : available) {
             int cap = remainingCapacity.getOrDefault(v, 0);
             Timestamp freeTime = nextFreeTime.getOrDefault(v, new Timestamp(0));
+            int pax = r.getNbrPassager() != null ? r.getNbrPassager() : 0;
+            if (cap >= pax && !freeTime.after(currentTime)) {
+                candidates.add(v);
+            }
+        }
 
-            if (cap >= r.getNbrPassager() && !freeTime.after(currentTime)) {
-                TypeCarburant t = typeById.get(v.getIdTypeCarburant());
-                int dieselScore = (t != null && t.getCode() != null && t.getCode().equalsIgnoreCase("D")) ? 1 : 0;
-                int diff = v.getNbrPlace() - r.getNbrPassager();
-                if (diff < bestDiff || (diff == bestDiff && dieselScore > bestScoreDiesel)) {
-                    best = v;
-                    bestScoreDiesel = dieselScore;
-                    bestDiff = diff;
-                }
+        if (candidates.isEmpty()) {
+            return null;
+        }
+
+        int minTrajets = Integer.MAX_VALUE;
+        for (Vehicule v : candidates) {
+            int cnt = trajetCount.getOrDefault(v, 0);
+            if (cnt < minTrajets) {
+                minTrajets = cnt;
+            }
+        }
+
+        Vehicule best = null;
+        int bestFuelPriority = Integer.MIN_VALUE;
+        int bestDiff = Integer.MAX_VALUE;
+        String bestId = null;
+
+        for (Vehicule v : candidates) {
+            if (trajetCount.getOrDefault(v, 0) != minTrajets) {
+                continue;
+            }
+            int pax = r.getNbrPassager() != null ? r.getNbrPassager() : 0;
+            int cap = remainingCapacity.getOrDefault(v, 0);
+            int diff = cap - pax;
+            TypeCarburant t = typeById.get(v.getIdTypeCarburant());
+            int fuelPriority = getFuelPriority(t != null ? t.getCode() : null);
+            String currentId = v.getIdVehicule() != null ? v.getIdVehicule() : "";
+
+            if (fuelPriority > bestFuelPriority
+                    || (fuelPriority == bestFuelPriority && diff < bestDiff)
+                    || (fuelPriority == bestFuelPriority && diff == bestDiff
+                            && (bestId == null || currentId.compareTo(bestId) < 0))) {
+                best = v;
+                bestFuelPriority = fuelPriority;
+                bestDiff = diff;
+                bestId = currentId;
             }
         }
         return best;
+    }
+
+    private int getFuelPriority(String fuelCode) {
+        if (fuelCode == null) {
+            return 0;
+        }
+        if ("EL".equalsIgnoreCase(fuelCode)) {
+            return 3;
+        }
+        if ("D".equalsIgnoreCase(fuelCode)) {
+            return 2;
+        }
+        if ("E".equalsIgnoreCase(fuelCode)) {
+            return 1;
+        }
+        return 0;
     }
 
     private long calculerDureeTournee(List<Reservation> tour, Map<String, Hotel> hotelMap,
@@ -291,6 +363,16 @@ public class VehiculeController {
         if (matrix.containsKey(to))
             return matrix.get(to).get(from);
         return null;
+    }
+
+    private Timestamp startOfDay(Timestamp ts) {
+        Calendar cal = Calendar.getInstance();
+        cal.setTimeInMillis(ts.getTime());
+        cal.set(Calendar.HOUR_OF_DAY, 0);
+        cal.set(Calendar.MINUTE, 0);
+        cal.set(Calendar.SECOND, 0);
+        cal.set(Calendar.MILLISECOND, 0);
+        return new Timestamp(cal.getTimeInMillis());
     }
 
     private List<Reservation> filtrerReservations(List<Reservation> reservations, String date) {
