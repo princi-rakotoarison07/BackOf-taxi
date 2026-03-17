@@ -1,3 +1,4 @@
+com\taxi\model\LieuHotel.class
 com\taxi\controller\TrajetController.class
 com\taxi\model\Distance.class
 com\taxi\model\Hotel.class

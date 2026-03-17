@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import com.taxi.model.Hotel;
+import com.taxi.model.LieuHotel;
 import com.taxi.model.Distance;
 import com.taxi.model.Parametre;
 
@@ -80,6 +81,7 @@ public class VehiculeController {
             List<TypeCarburant> types = TypeCarburant.getAll(TypeCarburant.class, conn);
             List<Reservation> reservations = Reservation.getAll(Reservation.class, conn);
             List<Hotel> hotels = Hotel.getAll(Hotel.class, conn);
+            List<LieuHotel> lieux = LieuHotel.getAll(LieuHotel.class, conn);
             List<Distance> distances = Distance.getAll(Distance.class, conn);
             List<Parametre> parametres = Parametre.getAll(Parametre.class, conn);
             Parametre currentParam = (parametres != null && !parametres.isEmpty()) ? parametres.get(0) : null;
@@ -88,12 +90,13 @@ public class VehiculeController {
 
             Map<String, TypeCarburant> typeById = construireMapType(types);
             Map<String, Hotel> hotelMap = construireMapHotel(hotels);
+            Map<String, String> quartierByHotel = construireMapQuartier(hotels, lieux);
             Map<String, Map<String, Distance>> distanceMatrix = construireMatriceDistance(distances);
 
             // Calculer les assignations pour toute la journée pour connaître les périodes
             // d'occupation
             Map<Vehicule, List<Tournee>> planning = calculerPlanningJournée(filtered, vehicules, typeById, hotelMap,
-                    distanceMatrix, currentParam);
+                    quartierByHotel, distanceMatrix, currentParam);
 
             Timestamp targetTime = null;
             if (date != null && !date.isEmpty() && time != null && !time.isEmpty()) {
@@ -143,6 +146,7 @@ public class VehiculeController {
 
     private Map<Vehicule, List<Tournee>> calculerPlanningJournée(List<Reservation> reservations,
             List<Vehicule> vehicules, Map<String, TypeCarburant> typeById, Map<String, Hotel> hotelMap,
+            Map<String, String> quartierByHotel,
             Map<String, Map<String, Distance>> distanceMatrix, Parametre param) {
         Map<Vehicule, List<Tournee>> planning = new HashMap<>();
 
@@ -198,6 +202,13 @@ public class VehiculeController {
             }
 
             group.sort((a, b) -> {
+                if (!isReservationConfirmed(a) && isReservationConfirmed(b)) {
+                    return 1;
+                }
+                if (isReservationConfirmed(a) && !isReservationConfirmed(b)) {
+                    return -1;
+                }
+
                 Timestamp da = a.getDateResa();
                 Timestamp db = b.getDateResa();
                 int byDate;
@@ -213,9 +224,31 @@ public class VehiculeController {
                 if (byDate != 0) {
                     return byDate;
                 }
+
                 Integer pa = a.getNbrPassager() != null ? a.getNbrPassager() : 0;
                 Integer pb = b.getNbrPassager() != null ? b.getNbrPassager() : 0;
-                return pb.compareTo(pa);
+                int byPax = pb.compareTo(pa);
+                if (byPax != 0) {
+                    return byPax;
+                }
+
+                BigDecimal dair = distanceFromAirport(a, hotelMap, distanceMatrix);
+                BigDecimal dbir = distanceFromAirport(b, hotelMap, distanceMatrix);
+                int byDistance = dair.compareTo(dbir);
+                if (byDistance != 0) {
+                    return byDistance;
+                }
+
+                String qa = quartierByHotel.getOrDefault(a.getIdHotel(), "");
+                String qb = quartierByHotel.getOrDefault(b.getIdHotel(), "");
+                int byQuartier = qa.compareToIgnoreCase(qb);
+                if (byQuartier != 0) {
+                    return byQuartier;
+                }
+
+                String ida = a.getIdReservation() != null ? a.getIdReservation() : "";
+                String idb = b.getIdReservation() != null ? b.getIdReservation() : "";
+                return ida.compareToIgnoreCase(idb);
             });
 
             Map<Vehicule, Integer> remainingCapacity = new HashMap<>();
@@ -226,6 +259,10 @@ public class VehiculeController {
             Map<Vehicule, List<Reservation>> assignedToVehicule = new HashMap<>();
             final Timestamp dTime = departureTime;
             for (Reservation r : group) {
+                if (!isReservationConfirmed(r)) {
+                    processed.add(r.getIdReservation());
+                    continue;
+                }
                 Vehicule best = trouverMeilleurVehicule(r, vehicules, remainingCapacity, nextFreeTime,
                         trajetCount, dTime, typeById);
                 if (best != null) {
@@ -403,12 +440,48 @@ public class VehiculeController {
         return map;
     }
 
+    private Map<String, String> construireMapQuartier(List<Hotel> hotels, List<LieuHotel> lieux) {
+        Map<String, String> lieuNames = new HashMap<>();
+        for (LieuHotel l : lieux) {
+            lieuNames.put(l.getIdLieu(), l.getNomLieu());
+        }
+
+        Map<String, String> quartierByHotel = new HashMap<>();
+        for (Hotel h : hotels) {
+            quartierByHotel.put(h.getIdHotel(), lieuNames.getOrDefault(h.getIdLieu(), ""));
+        }
+        return quartierByHotel;
+    }
+
     private Map<String, Map<String, Distance>> construireMatriceDistance(List<Distance> distances) {
         Map<String, Map<String, Distance>> matrix = new HashMap<>();
         for (Distance d : distances) {
             matrix.computeIfAbsent(d.getLieuFrom(), k -> new HashMap<>()).put(d.getLieuTo(), d);
         }
         return matrix;
+    }
+
+    private BigDecimal distanceFromAirport(Reservation r, Map<String, Hotel> hotelMap,
+            Map<String, Map<String, Distance>> distanceMatrix) {
+        if (r == null || r.getIdHotel() == null) {
+            return BigDecimal.valueOf(Double.MAX_VALUE);
+        }
+        Hotel h = hotelMap.get(r.getIdHotel());
+        if (h == null || h.getIdLieu() == null) {
+            return BigDecimal.valueOf(Double.MAX_VALUE);
+        }
+        Distance d = getDistance(distanceMatrix, "LIEU001", h.getIdLieu());
+        return d != null ? d.getKilometre() : BigDecimal.valueOf(Double.MAX_VALUE);
+    }
+
+    private boolean isReservationConfirmed(Reservation r) {
+        return r != null
+                && r.getIdReservation() != null
+                && r.getIdClient() != null
+                && r.getIdHotel() != null
+                && r.getDateResa() != null
+                && r.getNbrPassager() != null
+                && r.getNbrPassager() > 0;
     }
 
     @PostMapping("/vehicule/save")

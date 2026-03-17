@@ -2,6 +2,7 @@ package com.taxi.controller;
 
 import com.taxi.model.Distance;
 import com.taxi.model.Hotel;
+import com.taxi.model.LieuHotel;
 import com.taxi.model.Parametre;
 import com.taxi.model.Reservation;
 import com.taxi.model.Trajet;
@@ -38,6 +39,7 @@ public class TrajetController {
             List<TypeCarburant>   types            = TypeCarburant.getAll(TypeCarburant.class, conn);
             List<Hotel>           hotels           = Hotel.getAll(Hotel.class, conn);
             List<Distance>        distances        = Distance.getAll(Distance.class, conn);
+            List<LieuHotel>       lieux            = LieuHotel.getAll(LieuHotel.class, conn);
             List<Parametre>       parametres       = Parametre.getAll(Parametre.class, conn);
             Parametre currentParam = (parametres != null && !parametres.isEmpty()) ? parametres.get(0) : null;
 
@@ -48,10 +50,11 @@ public class TrajetController {
             Map<String, TypeCarburant>              typeById       = buildTypeMap(types);
             Map<String, Hotel>                      hotelMap       = buildHotelMap(hotels);
             Map<String, Map<String, Distance>>      distanceMatrix = buildDistanceMatrix(distances);
+                Map<String, String>                     quartierByHotel = buildQuartierByHotelMap(hotels, lieux);
 
             // Calculer et retourner la liste des trajets
             List<Trajet> trajets = calculerTrajets(
-                    filtered, vehicules, typeById, hotelMap, distanceMatrix, currentParam);
+                    filtered, vehicules, typeById, hotelMap, quartierByHotel, distanceMatrix, currentParam);
 
             mv.addObject("trajets", trajets);
             mv.addObject("hotelMap", hotelMap);
@@ -79,6 +82,7 @@ public class TrajetController {
             List<Vehicule>    vehicules,
             Map<String, TypeCarburant>           typeById,
             Map<String, Hotel>                   hotelMap,
+            Map<String, String>                  quartierByHotel,
             Map<String, Map<String, Distance>>   distanceMatrix,
             Parametre param) {
 
@@ -141,6 +145,13 @@ public class TrajetController {
             // Ordre de traitement des réservations regroupées:
             // priorité à la réservation la plus ancienne, puis au plus grand groupe.
             window.sort((a, b) -> {
+                if (!isReservationConfirmed(a) && isReservationConfirmed(b)) {
+                    return 1;
+                }
+                if (isReservationConfirmed(a) && !isReservationConfirmed(b)) {
+                    return -1;
+                }
+
                 Timestamp da = a.getDateResa();
                 Timestamp db = b.getDateResa();
                 int byDate;
@@ -156,9 +167,31 @@ public class TrajetController {
                 if (byDate != 0) {
                     return byDate;
                 }
+
                 Integer pa = a.getNbrPassager() != null ? a.getNbrPassager() : 0;
                 Integer pb = b.getNbrPassager() != null ? b.getNbrPassager() : 0;
-                return pb.compareTo(pa);
+                int byPax = pb.compareTo(pa);
+                if (byPax != 0) {
+                    return byPax;
+                }
+
+                BigDecimal dair = distanceFromAirport(a, hotelMap, distanceMatrix);
+                BigDecimal dbir = distanceFromAirport(b, hotelMap, distanceMatrix);
+                int byDistance = dair.compareTo(dbir);
+                if (byDistance != 0) {
+                    return byDistance;
+                }
+
+                String qa = quartierByHotel.getOrDefault(a.getIdHotel(), "");
+                String qb = quartierByHotel.getOrDefault(b.getIdHotel(), "");
+                int byQuartier = qa.compareToIgnoreCase(qb);
+                if (byQuartier != 0) {
+                    return byQuartier;
+                }
+
+                String ida = a.getIdReservation() != null ? a.getIdReservation() : "";
+                String idb = b.getIdReservation() != null ? b.getIdReservation() : "";
+                return ida.compareToIgnoreCase(idb);
             });
 
             Map<Vehicule, List<Reservation>> vehiculeGroup = new LinkedHashMap<>();
@@ -166,6 +199,10 @@ public class TrajetController {
             for (Vehicule v : available) remainingCap.put(v, v.getNbrPlace() != null ? v.getNbrPlace() : 0);
 
             for (Reservation r : window) {
+                if (!isReservationConfirmed(r)) {
+                    assigned.add(r.getIdReservation());
+                    continue;
+                }
                 Vehicule best = choisirVehicule(r, available, remainingCap, nextFreeTime, trajetCount,
                         heureDepart, typeById);
                 if (best != null) {
@@ -384,6 +421,44 @@ public class TrajetController {
         Map<String, Hotel> m = new HashMap<>();
         for (Hotel h : hotels) m.put(h.getIdHotel(), h);
         return m;
+    }
+
+    private Map<String, String> buildQuartierByHotelMap(List<Hotel> hotels, List<LieuHotel> lieux) {
+        Map<String, String> lieuNames = new HashMap<>();
+        for (LieuHotel l : lieux) {
+            lieuNames.put(l.getIdLieu(), l.getNomLieu());
+        }
+
+        Map<String, String> quartierByHotel = new HashMap<>();
+        for (Hotel h : hotels) {
+            quartierByHotel.put(h.getIdHotel(), lieuNames.getOrDefault(h.getIdLieu(), ""));
+        }
+        return quartierByHotel;
+    }
+
+    private BigDecimal distanceFromAirport(Reservation r, Map<String, Hotel> hotelMap,
+            Map<String, Map<String, Distance>> distanceMatrix) {
+        if (r == null || r.getIdHotel() == null) {
+            return BigDecimal.valueOf(Double.MAX_VALUE);
+        }
+        Hotel h = hotelMap.get(r.getIdHotel());
+        if (h == null || h.getIdLieu() == null) {
+            return BigDecimal.valueOf(Double.MAX_VALUE);
+        }
+        Distance d = getDistance(distanceMatrix, "LIEU001", h.getIdLieu());
+        return d != null ? d.getKilometre() : BigDecimal.valueOf(Double.MAX_VALUE);
+    }
+
+    // En l'absence d'un champ de statut dédié en base, une réservation complète
+    // (id/client/hotel/date/passagers valides) est considérée confirmée.
+    private boolean isReservationConfirmed(Reservation r) {
+        return r != null
+                && r.getIdReservation() != null
+                && r.getIdClient() != null
+                && r.getIdHotel() != null
+                && r.getDateResa() != null
+                && r.getNbrPassager() != null
+                && r.getNbrPassager() > 0;
     }
 
     private Map<String, Map<String, Distance>> buildDistanceMatrix(List<Distance> distances) {
