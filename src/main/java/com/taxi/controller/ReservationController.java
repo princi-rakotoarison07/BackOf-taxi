@@ -534,7 +534,9 @@ public class ReservationController {
             List<Reservation> tour = entry.getValue();
             
             if (!tour.isEmpty()) {
-                Map<String, java.sql.Timestamp> times = calculerHeuresTournée(tour, hotelMap, distanceMatrix, param);
+                // Utiliser l'heure de départ calculée pour cette tournée (depTime)
+                Timestamp depTime = departureTimes.get(tour.get(0).getIdReservation());
+                Map<String, java.sql.Timestamp> times = calculerHeuresTournée(tour, hotelMap, distanceMatrix, param, depTime);
                 detailedTimes.put(key, times);
             }
         }
@@ -543,17 +545,13 @@ public class ReservationController {
     }
 
     private Map<String, java.sql.Timestamp> calculerHeuresTournée(List<Reservation> tour, 
-            Map<String, Hotel> hotelMap, Map<String, Map<String, Distance>> distanceMatrix, Parametre param) {
+            Map<String, Hotel> hotelMap, Map<String, Map<String, Distance>> distanceMatrix, Parametre param, Timestamp startTime) {
         
         Map<String, java.sql.Timestamp> times = new HashMap<>();
         
-        // Obtenir l'heure de départ de la première réservation
-        Reservation firstResa = tour.get(0);
-        Timestamp currentTime = firstResa.getDateResa();
-        
         // Calculer l'ordre de la tournée et les heures
         List<Reservation> orderedTour = calculerOrdreOptimal(tour, hotelMap, distanceMatrix);
-        calculerHeuresSegments(orderedTour, hotelMap, distanceMatrix, param, currentTime, times);
+        calculerHeuresSegments(orderedTour, hotelMap, distanceMatrix, param, startTime, times);
         calculerHeureRetour(orderedTour, hotelMap, distanceMatrix, param, times);
         
         return times;
@@ -591,9 +589,19 @@ public class ReservationController {
         for (Reservation r : remainingResa) {
             Hotel h = hotelMap.get(r.getIdHotel());
             if (h != null) {
-                Distance d = getDistance(distanceMatrix, currentLieu, h.getIdLieu());
-                if (d != null && d.getKilometre().compareTo(minDistance) < 0) {
-                    minDistance = d.getKilometre();
+                BigDecimal currentDist = null;
+                // Cas où le départ et l'arrivée sont identiques (ex: Hotel 1 -> Hotel 1)
+                if (currentLieu.equals(h.getIdLieu())) {
+                    currentDist = BigDecimal.ZERO;
+                } else {
+                    Distance d = getDistance(distanceMatrix, currentLieu, h.getIdLieu());
+                    if (d != null) {
+                        currentDist = d.getKilometre();
+                    }
+                }
+                
+                if (currentDist != null && currentDist.compareTo(minDistance) < 0) {
+                    minDistance = currentDist;
                     nextResa = r;
                 }
             }
