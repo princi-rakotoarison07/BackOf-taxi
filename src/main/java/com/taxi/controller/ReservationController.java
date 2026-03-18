@@ -17,6 +17,7 @@ import com.taxi.model.TypeCarburant;
 import com.taxi.model.Hotel;
 import com.taxi.model.Distance;
 import com.taxi.model.Parametre;
+import com.taxi.model.Assignation;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Map;
@@ -123,6 +124,24 @@ public class ReservationController {
         mv.addObject("pageTitle", "Assignation par Véhicule");
         prepareAssignationData(mv, date);
         return mv;
+    }
+
+    @PostMapping("/BackOf-taxi/reservation/save-assignation")
+    public Map<String, Object> saveAssignation(@ModelAttribute Assignation assignation) {
+        Map<String, Object> result = new HashMap<>();
+        try (Connection conn = DBConnection.getConnection()) {
+            if (assignation.getIdAssignation() == null || assignation.getIdAssignation().isEmpty()) {
+                assignation.setIdAssignation("ASS" + System.currentTimeMillis());
+            }
+            assignation.insert(conn);
+            result.put("status", "success");
+            result.put("message", "Assignation enregistrée !");
+        } catch (Exception e) {
+            e.printStackTrace();
+            result.put("status", "error");
+            result.put("message", "Erreur lors de l'enregistrement : " + e.getMessage());
+        }
+        return result;
     }
 
     private void prepareAssignationData(ModelAndView mv, String date) throws Exception {

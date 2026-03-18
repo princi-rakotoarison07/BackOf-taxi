@@ -212,8 +212,19 @@
                                                 <small class="text-muted">Arrivée</small>
                                                 <div class="fw-bold text-success"><%= legArr %></div>
                                             </div>
-                                            <div class="px-2 border-start text-end" style="width: 90px;">
-                                                <span class="badge bg-primary rounded-pill"><%= currentResa.getNbrPassager() %> pers</span>
+                                            <div class="px-2 border-start text-end" style="width: 140px;">
+                                                <span class="badge bg-primary rounded-pill me-2"><%= currentResa.getNbrPassager() %> pers</span>
+                                                <button class="btn btn-sm btn-success rounded-circle btn-assign" 
+                                                        title="Enregistrer l'assignation"
+                                                        data-vehicule="<%= vId %>"
+                                                        data-reservation="<%= currentResa.getIdReservation() %>"
+                                                        data-pax="<%= currentResa.getNbrPassager() %>"
+                                                        data-date="<%= selectedDate %>"
+                                                        data-dep="<%= times != null && times.get(currentResa.getIdReservation() + "_departure") != null ? new java.sql.Timestamp(times.get(currentResa.getIdReservation() + "_departure").getTime()).toString().replace(" ", "T").substring(0, 16) : "" %>"
+                                                        data-arr="<%= times != null && times.get(currentResa.getIdReservation() + "_arrival") != null ? new java.sql.Timestamp(times.get(currentResa.getIdReservation() + "_arrival").getTime()).toString().replace(" ", "T").substring(0, 16) : "" %>"
+                                                        data-num="<%= i + 1 %>">
+                                                    <i class="fas fa-save"></i>
+                                                </button>
                                             </div>
                                         </div>
                                         <% } %>
@@ -279,6 +290,53 @@
                 const btn = document.querySelector(`[data-bs-target="#${el.id}"]`);
                 btn.innerHTML = '<i class="fas fa-plus"></i>';
                 btn.classList.replace('btn-primary', 'btn-outline-primary');
+            });
+        });
+
+        // Handle Assignment Saving
+        const assignButtons = document.querySelectorAll('.btn-assign');
+        assignButtons.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const data = this.dataset;
+                const formData = new URLSearchParams();
+                formData.append('idVehicule', data.vehicule);
+                formData.append('idReservation', data.reservation);
+                formData.append('nbrPassager', data.pax);
+                formData.append('dateAssignation', data.date);
+                formData.append('heureDepartPrevue', data.dep);
+                formData.append('heureArriveePrevue', data.arr);
+                formData.append('numTrajet', data.num);
+
+                const originalHtml = this.innerHTML;
+                this.disabled = true;
+                this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+                fetch('${pageContext.request.contextPath}/BackOf-taxi/reservation/save-assignation', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(res => {
+                    if (res.status === 'success') {
+                        this.classList.replace('btn-success', 'btn-secondary');
+                        this.innerHTML = '<i class="fas fa-check"></i>';
+                        this.title = 'Déjà enregistré';
+                        alert(res.message);
+                    } else {
+                        alert('Erreur: ' + res.message);
+                        this.disabled = false;
+                        this.innerHTML = originalHtml;
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert('Erreur réseau');
+                    this.disabled = false;
+                    this.innerHTML = originalHtml;
+                });
             });
         });
     });
