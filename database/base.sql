@@ -2,6 +2,7 @@
 
 -- Suppression des tables si elles existent
 DROP TABLE IF EXISTS reservation CASCADE;
+DROP TABLE IF EXISTS assignation_reservation CASCADE;
 DROP TABLE IF EXISTS hotel CASCADE;
 DROP TABLE IF EXISTS lieuhotel CASCADE;
 DROP TABLE IF EXISTS parametre CASCADE;
@@ -93,6 +94,29 @@ CREATE TABLE vehicule (
         REFERENCES type_carburant(id_type_carburant)
         ON UPDATE CASCADE
         ON DELETE RESTRICT
+);
+
+CREATE TABLE assignation_reservation (
+    id_assignation SERIAL PRIMARY KEY,
+    id_reservation VARCHAR(50) NOT NULL,
+    id_vehicule VARCHAR(50),
+    passagers_assignes INTEGER NOT NULL DEFAULT 0 CHECK (passagers_assignes >= 0),
+    passagers_non_assignes INTEGER NOT NULL DEFAULT 0 CHECK (passagers_non_assignes >= 0),
+    heure_depart TIMESTAMP,
+    heure_retour TIMESTAMP,
+    date_calcul TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_assignation_reservation
+        FOREIGN KEY (id_reservation)
+        REFERENCES reservation(id_reservation)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_assignation_vehicule
+        FOREIGN KEY (id_vehicule)
+        REFERENCES vehicule(id_vehicule)
+        ON UPDATE CASCADE
+        ON DELETE SET NULL
 );
 
 -- Insertion des types de carburant par défaut

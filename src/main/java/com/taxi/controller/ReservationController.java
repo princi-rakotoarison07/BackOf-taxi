@@ -22,8 +22,11 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 import java.math.RoundingMode;
 import java.math.BigDecimal;
+import java.sql.PreparedStatement;
 
 @Controller
 @RestController
@@ -146,13 +149,18 @@ public class ReservationController {
             Map<String, Timestamp> plannedDepartureTimes = new HashMap<>();
             Map<String, Integer> unassignedPassengers = new HashMap<>();
                 Map<String, List<String>> splitDetails = new HashMap<>();
+                Map<String, List<AffectationVehicule>> assignmentChunksByReservation = new HashMap<>();
             Map<String, Vehicule> assignments = assignerVehicules(filtered, vehicules, typeById, hotelMap,
-                    distanceMatrix, currentParam, plannedDepartureTimes, unassignedPassengers, splitDetails);
+                    distanceMatrix, currentParam, plannedDepartureTimes, unassignedPassengers, splitDetails,
+                    assignmentChunksByReservation);
             Map<String, Timestamp> departureTimes = new HashMap<>();
             Map<String, Timestamp> arrivalTimes = new HashMap<>();
 
             calculerHoraires(filtered, currentParam, hotelMap, distanceMatrix, assignments, plannedDepartureTimes, departureTimes,
                     arrivalTimes);
+
+                sauvegarderAssignations(conn, filtered, assignmentChunksByReservation, departureTimes, arrivalTimes,
+                    unassignedPassengers);
 
             mv.addObject("reservations", filtered);
             mv.addObject("vehicules", vehicules);
@@ -329,14 +337,15 @@ public class ReservationController {
             Map<String, Map<String, Distance>> distanceMatrix, Parametre param,
             Map<String, Timestamp> plannedDepartureTimes) {
         return assignerVehicules(reservations, vehicules, typeById, hotelMap, distanceMatrix, param,
-            plannedDepartureTimes, null, null);
+            plannedDepartureTimes, null, null, null);
     }
 
     private Map<String, Vehicule> assignerVehicules(List<Reservation> reservations, List<Vehicule> vehicules,
             Map<String, TypeCarburant> typeById, Map<String, Hotel> hotelMap,
             Map<String, Map<String, Distance>> distanceMatrix, Parametre param,
             Map<String, Timestamp> plannedDepartureTimes, Map<String, Integer> unassignedPassengers,
-            Map<String, List<String>> splitDetails) {
+            Map<String, List<String>> splitDetails,
+            Map<String, List<AffectationVehicule>> assignmentChunksByReservation) {
         Map<String, Vehicule> assignments = new HashMap<>();
         List<Vehicule> available = new ArrayList<>(vehicules);
         int waitMinutes = getTempsAttenteMinutes(param);
@@ -368,6 +377,10 @@ public class ReservationController {
                 List<AffectationVehicule> chunks = repartirReservationParCapacite(r, available, remainingCapacity,
                         nextFreeTime, departureTime, typeById, dailyTripCount);
                 if (!chunks.isEmpty()) {
+                    if (assignmentChunksByReservation != null) {
+                        assignmentChunksByReservation.put(r.getIdReservation(), new ArrayList<>(chunks));
+                    }
+
                     Vehicule principal = choisirVehiculePrincipal(chunks, dailyTripCount, typeById);
                     if (principal != null) {
                         assignments.put(r.getIdReservation(), principal);
@@ -395,6 +408,13 @@ public class ReservationController {
                     if (remaining > 0 && unassignedPassengers != null) {
                         unassignedPassengers.put(r.getIdReservation(), remaining);
                     }
+                } else {
+                    if (assignmentChunksByReservation != null) {
+                        assignmentChunksByReservation.put(r.getIdReservation(), new ArrayList<>());
+                    }
+                    if (unassignedPassengers != null && r.getNbrPassager() != null && r.getNbrPassager() > 0) {
+                        unassignedPassengers.put(r.getIdReservation(), r.getNbrPassager());
+                    }
                 }
             }
 
@@ -410,6 +430,91 @@ public class ReservationController {
         }
 
         return assignments;
+    }
+
+    private void sauvegarderAssignations(Connection conn, List<Reservation> reservations,
+            Map<String, List<AffectationVehicule>> assignmentChunksByReservation,
+            Map<String, Timestamp> departureTimes, Map<String, Timestamp> arrivalTimes,
+            Map<String, Integer> unassignedPassengers) throws Exception {
+        if (reservations == null || reservations.isEmpty()) {
+            return;
+        }
+
+        Set<String> reservationIds = new HashSet<>();
+        for (Reservation r : reservations) {
+            if (r != null && r.getIdReservation() != null && !r.getIdReservation().trim().isEmpty()) {
+                reservationIds.add(r.getIdReservation());
+            }
+        }
+        if (reservationIds.isEmpty()) {
+            return;
+        }
+
+        boolean originalAutoCommit = conn.getAutoCommit();
+        conn.setAutoCommit(false);
+        try {
+            String deleteSql = "DELETE FROM assignation_reservation WHERE id_reservation = ?";
+            try (PreparedStatement psDelete = conn.prepareStatement(deleteSql)) {
+                for (String idReservation : reservationIds) {
+                    psDelete.setString(1, idReservation);
+                    psDelete.addBatch();
+                }
+                psDelete.executeBatch();
+            }
+
+            String insertSql = "INSERT INTO assignation_reservation "
+                    + "(id_reservation, id_vehicule, passagers_assignes, passagers_non_assignes, heure_depart, heure_retour, date_calcul) "
+                    + "VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)";
+            try (PreparedStatement psInsert = conn.prepareStatement(insertSql)) {
+                for (Reservation r : reservations) {
+                    if (r == null || r.getIdReservation() == null) {
+                        continue;
+                    }
+
+                    String idReservation = r.getIdReservation();
+                    List<AffectationVehicule> chunks = assignmentChunksByReservation != null
+                            ? assignmentChunksByReservation.get(idReservation)
+                            : null;
+                    Timestamp dep = departureTimes != null ? departureTimes.get(idReservation) : null;
+                    Timestamp arr = arrivalTimes != null ? arrivalTimes.get(idReservation) : null;
+                    int nonAssignes = unassignedPassengers != null
+                            ? unassignedPassengers.getOrDefault(idReservation, 0)
+                            : 0;
+
+                    if (chunks != null && !chunks.isEmpty()) {
+                        for (int i = 0; i < chunks.size(); i++) {
+                            AffectationVehicule chunk = chunks.get(i);
+                            psInsert.setString(1, idReservation);
+                            psInsert.setString(2, chunk.vehicule != null ? chunk.vehicule.getIdVehicule() : null);
+                            psInsert.setInt(3, chunk.passagers);
+                            psInsert.setInt(4, i == 0 ? nonAssignes : 0);
+                            psInsert.setTimestamp(5, dep);
+                            psInsert.setTimestamp(6, arr);
+                            psInsert.addBatch();
+                        }
+                    } else {
+                        int nonAssignesLigne = nonAssignes > 0
+                                ? nonAssignes
+                                : (r.getNbrPassager() != null ? r.getNbrPassager() : 0);
+                        psInsert.setString(1, idReservation);
+                        psInsert.setString(2, null);
+                        psInsert.setInt(3, 0);
+                        psInsert.setInt(4, nonAssignesLigne);
+                        psInsert.setTimestamp(5, dep);
+                        psInsert.setTimestamp(6, arr);
+                        psInsert.addBatch();
+                    }
+                }
+                psInsert.executeBatch();
+            }
+
+            conn.commit();
+        } catch (Exception e) {
+            conn.rollback();
+            throw e;
+        } finally {
+            conn.setAutoCommit(originalAutoCommit);
+        }
     }
 
     private static class AffectationVehicule {
