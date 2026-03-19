@@ -1,12 +1,14 @@
 package com.taxi.model;
 
 import framework.annotation.Column;
+import framework.annotation.Id;
 import framework.annotation.Table;
 import framework.utilitaire.Model;
 import java.sql.Timestamp;
 
 @Table(name = "assignation")
 public class Assignation extends Model {
+    @Id
     @Column(name = "id_assignation")
     private String idAssignation;
 

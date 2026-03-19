@@ -133,6 +133,12 @@ public class ReservationController {
             if (assignation.getIdAssignation() == null || assignation.getIdAssignation().isEmpty()) {
                 assignation.setIdAssignation("ASS" + System.currentTimeMillis());
             }
+            
+            // Sécurité : Si dateAssignation est nulle, utiliser la date de départ prévue
+            if (assignation.getDateAssignation() == null && assignation.getHeureDepartPrevue() != null) {
+                assignation.setDateAssignation(assignation.getHeureDepartPrevue());
+            }
+            
             assignation.insert(conn);
             result.put("status", "success");
             result.put("message", "Assignation enregistrée !");
@@ -142,6 +148,32 @@ public class ReservationController {
             result.put("message", "Erreur lors de l'enregistrement : " + e.getMessage());
         }
         return result;
+    }
+
+    @GetMapping("/BackOf-taxi/reservation/assignations")
+    public ModelAndView listAssignations() throws Exception {
+        ModelAndView mv = new ModelAndView("/views/reservation/listAssignation.jsp");
+        mv.addObject("pageTitle", "Liste des Assignations");
+        try (Connection conn = DBConnection.getConnection()) {
+            List<Assignation> assignations = Assignation.getAll(Assignation.class, conn);
+            List<Vehicule> vehicules = Vehicule.getAll(Vehicule.class, conn);
+            List<Reservation> reservations = Reservation.getAll(Reservation.class, conn);
+            List<Hotel> hotels = Hotel.getAll(Hotel.class, conn);
+            
+            Map<String, Vehicule> vehiculeMap = new HashMap<>();
+            for (Vehicule v : vehicules) vehiculeMap.put(v.getIdVehicule(), v);
+            
+            Map<String, Reservation> reservationMap = new HashMap<>();
+            for (Reservation r : reservations) reservationMap.put(r.getIdReservation(), r);
+            
+            Map<String, Hotel> hotelMap = construireMapHotel(hotels);
+            
+            mv.addObject("assignations", assignations);
+            mv.addObject("vehiculeMap", vehiculeMap);
+            mv.addObject("reservationMap", reservationMap);
+            mv.addObject("hotelMap", hotelMap);
+        }
+        return mv;
     }
 
     private void prepareAssignationData(ModelAndView mv, String date) throws Exception {

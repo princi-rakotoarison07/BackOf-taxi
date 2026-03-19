@@ -162,13 +162,31 @@ public class DBUtil {
                     }
                     Object value = rs.getObject(columnName);
                     if (value != null) {
-                        field.set(instance, value);
+                        field.set(instance, convertValue(value, field.getType()));
                     }
                 }
                 results.add(instance);
             }
         }
         return results;
+    }
+
+    private static Object convertValue(Object value, Class<?> targetType) {
+        if (value == null) return null;
+        if (targetType.isAssignableFrom(value.getClass())) return value;
+
+        // Conversion java.sql.Date -> java.sql.Timestamp
+        if (value instanceof java.sql.Date && targetType == java.sql.Timestamp.class) {
+            return new java.sql.Timestamp(((java.sql.Date) value).getTime());
+        }
+        
+        // Conversion java.sql.Timestamp -> java.sql.Date
+        if (value instanceof java.sql.Timestamp && targetType == java.sql.Date.class) {
+            return new java.sql.Date(((java.sql.Timestamp) value).getTime());
+        }
+
+        // Autres conversions si nécessaire (ex: String -> Integer)
+        return value;
     }
 
     public static <T> T getById(Class<T> clazz, Object id, Connection conn) throws Exception {

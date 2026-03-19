@@ -302,9 +302,13 @@
                 formData.append('idVehicule', data.vehicule);
                 formData.append('idReservation', data.reservation);
                 formData.append('nbrPassager', data.pax);
-                formData.append('dateAssignation', data.date);
-                formData.append('heureDepartPrevue', data.dep);
-                formData.append('heureArriveePrevue', data.arr);
+                
+                // Utiliser la date du trajet si selectedDate est vide
+                const assignDate = data.date && data.date !== 'null' ? data.date : data.dep.substring(0, 10);
+                formData.append('dateAssignation', assignDate + ' 00:00:00');
+                
+                formData.append('heureDepartPrevue', data.dep + ':00');
+                formData.append('heureArriveePrevue', data.arr + ':00');
                 formData.append('numTrajet', data.num);
 
                 const originalHtml = this.innerHTML;

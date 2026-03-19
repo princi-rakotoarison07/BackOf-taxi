@@ -196,6 +196,8 @@
         .bg-indigo-soft { background-color: rgba(99, 102, 241, 0.1); }
         .bg-success-soft { background-color: rgba(34, 197, 94, 0.1); }
         .bg-danger-soft { background-color: rgba(239, 68, 68, 0.1); }
+        .bg-primary-soft { background-color: rgba(193, 241, 29, 0.1); }
+        .bg-info-soft { background-color: rgba(13, 202, 240, 0.1); }
         
         @media (max-width: 992px) {
             #sidebar { left: -var(--sidebar-width); }
@@ -226,6 +228,9 @@
                 </a>
                 <a href="${pageContext.request.contextPath}/BackOf-taxi/reservation/assignation-vehicule" class="nav-link ps-5 py-2 small <%= request.getServletPath().contains("reservation/assignationVehicule.jsp") ? "fw-bold text-primary" : "" %>">
                     <i class="fas fa-car me-2" style="font-size: 0.8rem;"></i> Par Véhicule
+                </a>
+                <a href="${pageContext.request.contextPath}/BackOf-taxi/reservation/assignations" class="nav-link ps-5 py-2 small <%= request.getRequestURI().contains("reservation/assignations") ? "fw-bold text-primary" : "" %>">
+                    <i class="fas fa-clipboard-list me-2" style="font-size: 0.8rem;"></i> Liste Validée
                 </a>
             </div>
         </div>
