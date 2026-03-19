@@ -10,6 +10,8 @@
     Map<String, Vehicule> assignments = (Map<String, Vehicule>) request.getAttribute("assignments");
     Map<String, java.sql.Timestamp> departureTimes = (Map<String, java.sql.Timestamp>) request.getAttribute("departureTimes");
     Map<String, java.sql.Timestamp> arrivalTimes = (Map<String, java.sql.Timestamp>) request.getAttribute("arrivalTimes");
+    Map<String, List<String>> splitDetails = (Map<String, List<String>>) request.getAttribute("splitDetails");
+    Map<String, Integer> unassignedPassengers = (Map<String, Integer>) request.getAttribute("unassignedPassengers");
     List<TypeCarburant> types = (List<TypeCarburant>) request.getAttribute("types");
     String selectedDate = (String) request.getAttribute("selectedDate");
     List<Hotel> hotels = (List<Hotel>) request.getAttribute("hotels");
@@ -57,6 +59,7 @@
                             <th>Véhicule</th>
                             <th>Capacité</th>
                             <th>Carburant</th>
+                            <th>Répartition</th>
                             <th>Départ</th>
                             <th>Retour</th>
                         </tr>
@@ -73,6 +76,8 @@
                                         t = typeById.get(v.getIdTypeCarburant());
                                     }
                                     Hotel h = hotelMap != null ? hotelMap.get(r.getIdHotel()) : null;
+                                    List<String> split = splitDetails != null ? splitDetails.get(r.getIdReservation()) : null;
+                                    Integer reste = unassignedPassengers != null ? unassignedPassengers.get(r.getIdReservation()) : null;
                         %>
                         <tr>
                             <td class="ps-4 fw-bold">#<%= r.getIdReservation() %></td>
@@ -91,13 +96,23 @@
                                     -
                                 <% } %>
                             </td>
+                            <td>
+                                <% if (split != null && !split.isEmpty()) { %>
+                                    <%= String.join(" | ", split) %>
+                                    <% if (reste != null && reste > 0) { %>
+                                        <div class="text-danger small">Reste non assigné: <%= reste %> pax</div>
+                                    <% } %>
+                                <% } else { %>
+                                    -
+                                <% } %>
+                            </td>
                             <td><%= dep != null ? df.format(dep) : "-" %></td>
                             <td><%= arr != null ? df.format(arr) : "-" %></td>
                         </tr>
                         <%      }
                             } else { %>
                         <tr>
-                            <td colspan="10" class="text-center py-5">
+                            <td colspan="11" class="text-center py-5">
                                 <p class="text-muted mb-0">Aucune donnée disponible pour cette date.</p>
                             </td>
                         </tr>

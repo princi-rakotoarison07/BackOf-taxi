@@ -280,37 +280,33 @@ public class VehiculeController {
             Map<String, TypeCarburant> typeById, Map<Vehicule, Integer> dailyTripCount) {
         List<AffectationVehicule> chunks = new ArrayList<>();
         int toAssign = reservation.getNbrPassager();
+        Map<Vehicule, Integer> simulatedCapacity = new HashMap<>(remainingCapacity);
 
         while (toAssign > 0) {
-            Vehicule fit = trouverMeilleurVehicule(reservation, available, remainingCapacity, nextFreeTime,
+            Vehicule fit = trouverMeilleurVehicule(reservation, available, simulatedCapacity, nextFreeTime,
                     currentTime, typeById, dailyTripCount, toAssign);
             if (fit != null) {
                 chunks.add(new AffectationVehicule(fit, toAssign));
+                simulatedCapacity.put(fit, simulatedCapacity.getOrDefault(fit, 0) - toAssign);
                 toAssign = 0;
                 continue;
             }
 
-            Vehicule partial = trouverVehiculePourAllocationPartielle(available, remainingCapacity, nextFreeTime,
+            Vehicule partial = trouverVehiculePourAllocationPartielle(available, simulatedCapacity, nextFreeTime,
                     currentTime, typeById, dailyTripCount);
             if (partial == null) {
                 break;
             }
 
-            int cap = remainingCapacity.getOrDefault(partial, 0);
+            int cap = simulatedCapacity.getOrDefault(partial, 0);
             if (cap <= 0) {
                 break;
             }
 
             int affectes = Math.min(cap, toAssign);
             chunks.add(new AffectationVehicule(partial, affectes));
-            remainingCapacity.put(partial, cap - affectes);
+            simulatedCapacity.put(partial, cap - affectes);
             toAssign -= affectes;
-        }
-
-        // Restaurer les capacites temporairement modifiees pendant la simulation partielle.
-        for (AffectationVehicule chunk : chunks) {
-            int cap = remainingCapacity.getOrDefault(chunk.vehicule, 0);
-            remainingCapacity.put(chunk.vehicule, cap + chunk.passagers);
         }
         return chunks;
     }

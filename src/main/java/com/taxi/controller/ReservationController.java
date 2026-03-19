@@ -145,8 +145,9 @@ public class ReservationController {
 
             Map<String, Timestamp> plannedDepartureTimes = new HashMap<>();
             Map<String, Integer> unassignedPassengers = new HashMap<>();
+                Map<String, List<String>> splitDetails = new HashMap<>();
             Map<String, Vehicule> assignments = assignerVehicules(filtered, vehicules, typeById, hotelMap,
-                    distanceMatrix, currentParam, plannedDepartureTimes, unassignedPassengers);
+                    distanceMatrix, currentParam, plannedDepartureTimes, unassignedPassengers, splitDetails);
             Map<String, Timestamp> departureTimes = new HashMap<>();
             Map<String, Timestamp> arrivalTimes = new HashMap<>();
 
@@ -160,6 +161,7 @@ public class ReservationController {
             mv.addObject("departureTimes", departureTimes);
             mv.addObject("arrivalTimes", arrivalTimes);
             mv.addObject("unassignedPassengers", unassignedPassengers);
+            mv.addObject("splitDetails", splitDetails);
             mv.addObject("selectedDate", date);
             mv.addObject("hotels", hotels);
             mv.addObject("hotelMap", hotelMap);
@@ -293,13 +295,14 @@ public class ReservationController {
             Map<String, Map<String, Distance>> distanceMatrix, Parametre param,
             Map<String, Timestamp> plannedDepartureTimes) {
         return assignerVehicules(reservations, vehicules, typeById, hotelMap, distanceMatrix, param,
-                plannedDepartureTimes, null);
+            plannedDepartureTimes, null, null);
     }
 
     private Map<String, Vehicule> assignerVehicules(List<Reservation> reservations, List<Vehicule> vehicules,
             Map<String, TypeCarburant> typeById, Map<String, Hotel> hotelMap,
             Map<String, Map<String, Distance>> distanceMatrix, Parametre param,
-            Map<String, Timestamp> plannedDepartureTimes, Map<String, Integer> unassignedPassengers) {
+            Map<String, Timestamp> plannedDepartureTimes, Map<String, Integer> unassignedPassengers,
+            Map<String, List<String>> splitDetails) {
         Map<String, Vehicule> assignments = new HashMap<>();
         List<Vehicule> available = new ArrayList<>(vehicules);
         int waitMinutes = getTempsAttenteMinutes(param);
@@ -338,14 +341,20 @@ public class ReservationController {
                     }
 
                     int totalAssigned = 0;
+                    List<String> splitInfo = new ArrayList<>();
                     for (AffectationVehicule chunk : chunks) {
                         totalAssigned += chunk.passagers;
+                        splitInfo.add(chunk.vehicule.getIdVehicule() + ":" + chunk.passagers);
                         remainingCapacity.put(chunk.vehicule,
                                 remainingCapacity.getOrDefault(chunk.vehicule, 0) - chunk.passagers);
                         List<Reservation> tour = assignedToVehicule.computeIfAbsent(chunk.vehicule, k -> new ArrayList<>());
                         if (!tour.contains(r)) {
                             tour.add(r);
                         }
+                    }
+
+                    if (splitDetails != null) {
+                        splitDetails.put(r.getIdReservation(), splitInfo);
                     }
 
                     int remaining = r.getNbrPassager() - totalAssigned;
@@ -385,37 +394,33 @@ public class ReservationController {
             Map<String, TypeCarburant> typeById, Map<Vehicule, Integer> dailyTripCount) {
         List<AffectationVehicule> chunks = new ArrayList<>();
         int toAssign = reservation.getNbrPassager();
+        Map<Vehicule, Integer> simulatedCapacity = new HashMap<>(remainingCapacity);
 
         while (toAssign > 0) {
-            Vehicule fit = trouverMeilleurVehiculePourGroupe(reservation, available, remainingCapacity, nextFreeTime,
+            Vehicule fit = trouverMeilleurVehiculePourGroupe(reservation, available, simulatedCapacity, nextFreeTime,
                     currentTime, typeById, dailyTripCount, toAssign);
             if (fit != null) {
                 chunks.add(new AffectationVehicule(fit, toAssign));
+                simulatedCapacity.put(fit, simulatedCapacity.getOrDefault(fit, 0) - toAssign);
                 toAssign = 0;
                 continue;
             }
 
-            Vehicule partial = trouverVehiculePourAllocationPartielle(available, remainingCapacity, nextFreeTime,
+            Vehicule partial = trouverVehiculePourAllocationPartielle(available, simulatedCapacity, nextFreeTime,
                     currentTime, typeById, dailyTripCount);
             if (partial == null) {
                 break;
             }
 
-            int cap = remainingCapacity.getOrDefault(partial, 0);
+            int cap = simulatedCapacity.getOrDefault(partial, 0);
             if (cap <= 0) {
                 break;
             }
 
             int affectes = Math.min(cap, toAssign);
             chunks.add(new AffectationVehicule(partial, affectes));
-            remainingCapacity.put(partial, cap - affectes);
+            simulatedCapacity.put(partial, cap - affectes);
             toAssign -= affectes;
-        }
-
-        // Restaurer les capacites temporairement modifiees pendant la simulation partielle.
-        for (AffectationVehicule chunk : chunks) {
-            int cap = remainingCapacity.getOrDefault(chunk.vehicule, 0);
-            remainingCapacity.put(chunk.vehicule, cap + chunk.passagers);
         }
         return chunks;
     }
