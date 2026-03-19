@@ -292,6 +292,11 @@ public class ReservationController {
         Map<String, Vehicule> assignments = new HashMap<>();
         List<Vehicule> available = new ArrayList<>(vehicules);
 
+        Map<Vehicule, Integer> tripCount = new HashMap<>();
+        for (Vehicule v : available) {
+            tripCount.put(v, 0);
+        }
+
         // Grouper les réservations par date/heure exacte (tronqué à la minute)
         Map<Timestamp, List<Reservation>> groupedByTime = new HashMap<>();
         for (Reservation r : reservations) {
@@ -337,7 +342,7 @@ public class ReservationController {
 
             for (Reservation r : group) {
                 Vehicule best = trouverMeilleurVehiculePourGroupe(r, available, remainingCapacity, nextFreeTime, t,
-                        typeById);
+                        typeById, tripCount);
                 if (best != null) {
                     assignments.put(r.getIdReservation(), best);
                     remainingCapacity.put(best, remainingCapacity.get(best) - r.getNbrPassager());
@@ -352,10 +357,50 @@ public class ReservationController {
                 List<Reservation> tour = entry.getValue();
                 long durationMs = calculerDureeTournee(tour, hotelMap, distanceMatrix, param);
                 nextFreeTime.put(v, new Timestamp(t.getTime() + durationMs));
+                tripCount.put(v, tripCount.getOrDefault(v, 0) + 1);
             }
         }
 
         return assignments;
+    }
+
+    private long calculerDureeTourneeSansRetour(List<Reservation> tour, Map<String, Hotel> hotelMap,
+            Map<String, Map<String, Distance>> distanceMatrix, Parametre param) {
+        if (param == null || param.getVitesseMoyenne() == null
+                || param.getVitesseMoyenne().compareTo(BigDecimal.ZERO) <= 0)
+            return 0;
+
+        BigDecimal totalDistance = BigDecimal.ZERO;
+        String currentLieu = "LIEU001";
+        List<Reservation> remainingResa = new ArrayList<>(tour);
+
+        while (!remainingResa.isEmpty()) {
+            Reservation nextResa = null;
+            BigDecimal minDistance = BigDecimal.valueOf(Double.MAX_VALUE);
+
+            for (Reservation r : remainingResa) {
+                Hotel h = hotelMap.get(r.getIdHotel());
+                if (h != null) {
+                    Distance d = getDistance(distanceMatrix, currentLieu, h.getIdLieu());
+                    if (d != null && d.getKilometre().compareTo(minDistance) < 0) {
+                        minDistance = d.getKilometre();
+                        nextResa = r;
+                    }
+                }
+            }
+
+            if (nextResa != null) {
+                totalDistance = totalDistance.add(minDistance);
+                Hotel h = hotelMap.get(nextResa.getIdHotel());
+                currentLieu = h.getIdLieu();
+                remainingResa.remove(nextResa);
+            } else {
+                break;
+            }
+        }
+
+        BigDecimal travelTimeHours = totalDistance.divide(param.getVitesseMoyenne(), 4, RoundingMode.HALF_UP);
+        return (long) (travelTimeHours.doubleValue() * 3600000L);
     }
 
     private long calculerDureeTournee(List<Reservation> tour, Map<String, Hotel> hotelMap,
@@ -404,11 +449,12 @@ public class ReservationController {
 
     private Vehicule trouverMeilleurVehiculePourGroupe(Reservation r, List<Vehicule> available,
             Map<Vehicule, Integer> remainingCapacity, Map<Vehicule, Timestamp> nextFreeTime, Timestamp currentTime,
-            Map<String, TypeCarburant> typeById) {
+            Map<String, TypeCarburant> typeById, Map<Vehicule, Integer> tripCount) {
         Vehicule best = null;
         double bestFillRate = -1.0;
-        int bestScoreDiesel = -1;
         int bestTotalCapacity = Integer.MAX_VALUE;
+        int bestTripCount = Integer.MAX_VALUE;
+        int bestScoreDiesel = -1;
 
         for (Vehicule v : available) {
             int currentCap = remainingCapacity.getOrDefault(v, 0);
@@ -426,7 +472,8 @@ public class ReservationController {
                 // Critères de choix (par ordre de priorité) :
                 // 1. Maximiser le taux de remplissage final (favorise le groupement et l'utilisation optimale)
                 // 2. Si taux identique, favoriser le véhicule avec la plus petite capacité totale (économise les gros véhicules)
-                // 3. Si capacité identique, favoriser le Diesel
+                // 3. Si capacité identique, favoriser le véhicule ayant fait le moins de trajets dans la journée
+                // 4. Si toujours identique, favoriser le Diesel
                 
                 boolean isBetter = false;
                 if (fillRateAfter > bestFillRate + 0.0001) {
@@ -435,8 +482,13 @@ public class ReservationController {
                     if (v.getNbrPlace() < bestTotalCapacity) {
                         isBetter = true;
                     } else if (v.getNbrPlace() == bestTotalCapacity) {
-                        if (dieselScore > bestScoreDiesel) {
+                        int vTrips = tripCount != null ? tripCount.getOrDefault(v, 0) : 0;
+                        if (vTrips < bestTripCount) {
                             isBetter = true;
+                        } else if (vTrips == bestTripCount) {
+                            if (dieselScore > bestScoreDiesel) {
+                                isBetter = true;
+                            }
                         }
                     }
                 }
@@ -444,8 +496,9 @@ public class ReservationController {
                 if (isBetter) {
                     best = v;
                     bestFillRate = fillRateAfter;
-                    bestScoreDiesel = dieselScore;
                     bestTotalCapacity = v.getNbrPlace();
+                    bestTripCount = tripCount != null ? tripCount.getOrDefault(v, 0) : 0;
+                    bestScoreDiesel = dieselScore;
                 }
             }
         }
