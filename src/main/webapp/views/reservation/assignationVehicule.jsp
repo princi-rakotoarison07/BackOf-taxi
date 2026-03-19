@@ -6,61 +6,7 @@
 <%@ page import="com.taxi.model.Hotel" %>
 <jsp:include page="../layout/header.jsp" />
 <style>
-.journey-timeline {
-    font-size: 0.9rem;
-}
-.journey-step {
-    border-left: 3px solid #007bff;
-    padding-left: 15px;
-    position: relative;
-    margin-bottom: 20px;
-}
-.journey-step:before {
-    content: '';
-    position: absolute;
-    left: -6px;
-    top: 0;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: #007bff;
-    border: 2px solid white;
-}
-.journey-location {
-    font-weight: 500;
-    color: #333;
-}
-.journey-arrow {
-    font-size: 1.2rem;
-    color: #007bff;
-    font-weight: bold;
-}
-.journey-time {
-    font-weight: 600;
-    color: #007bff;
-    text-align: center;
-    font-size: 0.95rem;
-}
-.reservation-detail {
-    background: #f8f9fa;
-    border-left: 3px solid #28a745;
-    margin: 10px 0 10px 20px;
-}
-.reservation-detail .journey-step {
-    border-left: none;
-    padding-left: 0;
-    margin-bottom: 0;
-}
-.reservation-detail .journey-step:before {
-    display: none;
-}
-.step-header {
-    background: #e9ecef;
-    padding: 8px 12px;
-    border-radius: 6px;
-    margin-bottom: 8px;
-    font-weight: 500;
-}
+
 .final-return {
     border-left: 3px solid #dc3545;
     background: #fff5f5;
@@ -210,105 +156,90 @@
                                 <div class="bg-light p-3 border-top border-bottom">
                                     <%
                                         // Récupérer l'ordre de cette tournée
-                                        String tourKey = vId + "|" + depTime;
-                                        List<Reservation> orderedTour = tourOrders != null ? tourOrders.get(tourKey) : assignedResas;
-                                        Map<String, java.sql.Timestamp> times = detailedTimes != null ? detailedTimes.get(tourKey) : null;
+                                        String tourKey = key; // Utiliser la clé complète (vId|depTime|arrTime)
+                                        List<Reservation> orderedTour = (tourOrders != null && tourOrders.containsKey(tourKey)) ? tourOrders.get(tourKey) : assignedResas;
+                                        Map<String, java.sql.Timestamp> times = (detailedTimes != null) ? detailedTimes.get(tourKey) : null;
                                         
                                         java.text.SimpleDateFormat timeFormat = new java.text.SimpleDateFormat("HH:mm");
                                         
                                         if (orderedTour != null && !orderedTour.isEmpty()) {
+                                            // L'heure de départ prévue à l'aéroport pour toute la tournée
+                                            String airportPrevu = depTime.contains(" ") ? depTime.split(" ")[1] : depTime;
                                     %>
-                                    <div class="tour-summary">
+                                    <div class="tour-details">
                                         <%
                                             for (int i = 0; i < orderedTour.size(); i++) {
                                                 Reservation currentResa = orderedTour.get(i);
                                                 Hotel currentHotel = hotelMap != null ? hotelMap.get(currentResa.getIdHotel()) : null;
-                                                java.sql.Timestamp departureTime = times != null ? times.get(currentResa.getIdReservation() + "_departure") : null;
-                                                java.sql.Timestamp arrivalTime = times != null ? times.get(currentResa.getIdReservation() + "_arrival") : null;
-                                                java.sql.Timestamp returnTime = times != null ? times.get("return_arrival") : null;
-                                                
-                                                // Déterminer le segment de trajet
-                                                String fromLocation = "Aéroport";
-                                                String toLocation = currentHotel != null ? currentHotel.getNomHotel() : currentResa.getIdHotel();
-                                                
+                                                String hotelName = currentHotel != null ? currentHotel.getNomHotel() : currentResa.getIdHotel();
+
+                                                // Déterminer le trajet
+                                                String fromLoc = "Aéroport";
                                                 if (i > 0) {
-                                                    // Pour les réservations suivantes, le départ vient de l'hôtel précédent
                                                     Reservation prevResa = orderedTour.get(i-1);
                                                     Hotel prevHotel = hotelMap != null ? hotelMap.get(prevResa.getIdHotel()) : null;
-                                                    fromLocation = prevHotel != null ? prevHotel.getNomHotel() : prevResa.getIdHotel();
+                                                    fromLoc = prevHotel != null ? prevHotel.getNomHotel() : prevResa.getIdHotel();
+                                                }
+                                                String toLoc = hotelName;
+
+                                                // Récupérer les horaires
+                                                String legDep = "-";
+                                                String legArr = "-";
+                                                
+                                                if (times != null) {
+                                                    java.sql.Timestamp tDep = times.get(currentResa.getIdReservation() + "_departure");
+                                                    java.sql.Timestamp tArr = times.get(currentResa.getIdReservation() + "_arrival");
+                                                    if (tDep != null) legDep = timeFormat.format(tDep);
+                                                    if (tArr != null) legArr = timeFormat.format(tArr);
                                                 }
                                         %>
-                                        <div class="reservation-line mb-2 p-2 bg-white rounded shadow-sm w-100">
-                                            <div class="d-flex align-items-center w-100">
-                                                <span class="fw-bold text-primary" style="width: 80px; text-align: left;"><%= currentResa.getIdClient() %></span>
-                                                <span style="width: 250px; text-align: left;"><%= fromLocation %> → <%= toLocation %></span>
-                                                <span class="text-muted" style="width: 180px; text-align: left;">Départ: <%= departureTime != null ? timeFormat.format(departureTime) : "-" %></span>
-                                                <span class="text-muted" style="width: 180px; text-align: left;">Arrivée: <%= arrivalTime != null ? timeFormat.format(arrivalTime) : "-" %></span>
-                                                <span class="text-muted flex-grow-1 me-1">Retour à l'aéroport: <%= returnTime != null ? timeFormat.format(returnTime) : "-" %></span>
-                                                <span class="badge bg-primary me-1" style="width: 70px; text-align: center;"><%= currentResa.getNbrPassager() %> pers</span>
-                                                <small class="text-muted" style="width: 80px;">#<%= currentResa.getIdReservation() %></small>
+                                        <div class="d-flex align-items-center py-2 px-3 border-bottom bg-white mb-1 rounded shadow-sm small">
+                                            <div class="fw-bold text-primary" style="width: 70px;"><%= currentResa.getIdClient() %></div>
+                                            <div class="flex-grow-1" style="min-width: 200px;">
+                                                <span class="text-muted"><%= fromLoc %></span>
+                                                <i class="fas fa-long-arrow-alt-right mx-2 text-primary opacity-50"></i>
+                                                <span class="fw-bold"><%= toLoc %></span>
+                                            </div>
+                                            <div class="px-2 border-start text-center" style="width: 160px;">
+                                                <small class="text-muted">Prévu Aéroport</small>
+                                                <div class="fw-bold"><%= airportPrevu %></div>
+                                            </div>
+                                            <div class="px-2 border-start text-center" style="width: 120px;">
+                                                <small class="text-muted">Départ</small>
+                                                <div class="fw-bold text-primary"><%= legDep %></div>
+                                            </div>
+                                            <div class="px-2 border-start text-center" style="width: 120px;">
+                                                <small class="text-muted">Arrivée</small>
+                                                <div class="fw-bold text-success"><%= legArr %></div>
+                                            </div>
+                                            <div class="px-2 border-start text-end" style="width: 90px;">
+                                                <span class="badge bg-primary rounded-pill"><%= currentResa.getNbrPassager() %> pers</span>
                                             </div>
                                         </div>
                                         <% } %>
-                                    </div>
-                                    <% } else { %>
-                                    <!-- Affichage par défaut si pas d'ordre calculé -->
-                                    <%
-                                        for (Reservation r : assignedResas) {
-                                            Hotel h = hotelMap != null ? hotelMap.get(r.getIdHotel()) : null;
-                                            java.sql.Timestamp dep = departureTimes != null ? departureTimes.get(r.getIdReservation()) : null;
-                                            java.sql.Timestamp arr = arrivalTimes != null ? arrivalTimes.get(r.getIdReservation()) : null;
-                                    %>
-                                    <div class="mb-3 p-3 bg-white rounded shadow-sm">
-                                        <div class="row align-items-center mb-2">
-                                            <div class="col-md-3">
-                                                <div class="fw-bold text-primary"><%= r.getIdClient() %></div>
-                                                <div class="small text-muted">ID: #<%= r.getIdReservation() %></div>
-                                            </div>
-                                            <div class="col-md-9">
-                                                <div class="d-flex justify-content-end">
-                                                    <span class="badge bg-primary"><%= r.getNbrPassager() %> pers.</span>
-                                                </div>
-                                            </div>
-                                        </div>
                                         
-                                        <div class="journey-timeline">
-                                            <div class="journey-step">
-                                                <div class="row align-items-center mb-2">
-                                                    <div class="col-md-4 text-end">
-                                                        <div class="journey-location">Aéroport Ivato</div>
-                                                    </div>
-                                                    <div class="col-md-2 text-center">
-                                                        <div class="journey-arrow">→</div>
-                                                    </div>
-                                                    <div class="col-md-4">
-                                                        <div class="journey-location"><%= h != null ? h.getNomHotel() : r.getIdHotel() %></div>
-                                                    </div>
-                                                    <div class="col-md-2">
-                                                        <div class="journey-time"><%= dep != null ? timeFormat.format(dep) : "-" %></div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            
-                                            <div class="journey-step mt-3">
-                                                <div class="row align-items-center mb-2">
-                                                    <div class="col-md-4 text-end">
-                                                        <div class="journey-location"><%= h != null ? h.getNomHotel() : r.getIdHotel() %></div>
-                                                    </div>
-                                                    <div class="col-md-2 text-center">
-                                                        <div class="journey-arrow">→</div>
-                                                    </div>
-                                                    <div class="col-md-4">
-                                                        <div class="journey-location">Aéroport Ivato</div>
-                                                    </div>
-                                                    <div class="col-md-2">
-                                                        <div class="journey-time"><%= arr != null ? timeFormat.format(arr) : "-" %></div>
-                                                    </div>
-                                                </div>
-                                            </div>
+                                        <%
+                                            // Retour final à l'aéroport
+                                            String finalReturn = "-";
+                                            String lastLoc = "Aéroport";
+                                            if (!orderedTour.isEmpty()) {
+                                                Reservation lastResa = orderedTour.get(orderedTour.size() - 1);
+                                                Hotel h = hotelMap.get(lastResa.getIdHotel());
+                                                lastLoc = h != null ? h.getNomHotel() : lastResa.getIdHotel();
+                                            }
+
+                                            if (times != null && times.containsKey("return_arrival")) {
+                                                finalReturn = timeFormat.format(times.get("return_arrival"));
+                                            } else {
+                                                finalReturn = arrTime.contains(" ") ? arrTime.split(" ")[1] : arrTime;
+                                            }
+                                        %>
+                                        <div class="mt-2 text-end pe-3">
+                                            <span class="text-muted small">Retour à l'aéroport : </span>
+                                            <span class="fw-bold text-danger"><%= finalReturn %></span>
+                                            <span class="text-muted small ms-1">(<%= lastLoc %> → Aéroport)</span>
                                         </div>
                                     </div>
-                                    <% } %>
                                     <% } %>
                                 </div>
                             </td>
