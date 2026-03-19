@@ -158,7 +158,7 @@ public class VehiculeController {
             if (departureTime == null)
                 continue;
 
-            group.sort((a, b) -> comparerReservationsPourAssignation(a, b, hotelMap, distanceMatrix));
+            group.sort((a, b) -> comparerReservationsIntraGroupe(a, b, hotelMap, distanceMatrix));
 
             Map<Vehicule, Integer> remainingCapacity = new HashMap<>();
             for (Vehicule v : vehicules) {
@@ -358,6 +358,40 @@ public class VehiculeController {
         return idA.compareToIgnoreCase(idB);
     }
 
+    private int comparerReservationsIntraGroupe(Reservation a, Reservation b,
+            Map<String, Hotel> hotelMap, Map<String, Map<String, Distance>> distanceMatrix) {
+        if (a == null && b == null)
+            return 0;
+        if (a == null)
+            return 1;
+        if (b == null)
+            return -1;
+
+        // Traitement collectif dans une meme fenetre: pas de priorite a la premiere arrivee.
+        int byPax = b.getNbrPassager().compareTo(a.getNbrPassager());
+        if (byPax != 0) {
+            return byPax;
+        }
+
+        BigDecimal distA = distanceDepuisBase(a, hotelMap, distanceMatrix);
+        BigDecimal distB = distanceDepuisBase(b, hotelMap, distanceMatrix);
+        int byDistance = distA.compareTo(distB);
+        if (byDistance != 0) {
+            return byDistance;
+        }
+
+        String lieuA = cleLieuAlphabetique(a, hotelMap);
+        String lieuB = cleLieuAlphabetique(b, hotelMap);
+        int byLieu = lieuA.compareToIgnoreCase(lieuB);
+        if (byLieu != 0) {
+            return byLieu;
+        }
+
+        String idA = a.getIdReservation() == null ? "" : a.getIdReservation();
+        String idB = b.getIdReservation() == null ? "" : b.getIdReservation();
+        return idA.compareToIgnoreCase(idB);
+    }
+
     private BigDecimal distanceDepuisBase(Reservation reservation, Map<String, Hotel> hotelMap,
             Map<String, Map<String, Distance>> distanceMatrix) {
         Hotel hotel = reservation != null ? hotelMap.get(reservation.getIdHotel()) : null;
@@ -475,11 +509,11 @@ public class VehiculeController {
         String code = type.getCode() != null ? type.getCode().trim().toLowerCase() : "";
         String libelle = type.getLibelle() != null ? type.getLibelle().trim().toLowerCase() : "";
 
-        if (code.equals("el") || code.equals("elec") || code.equals("ev")
-                || libelle.contains("elect") || libelle.contains("lectri")) {
+        if (code.equals("d") || libelle.contains("diesel")) {
             return 1;
         }
-        if (code.equals("d") || libelle.contains("diesel")) {
+        if (code.equals("el") || code.equals("elec") || code.equals("ev")
+                || libelle.contains("elect") || libelle.contains("lectri")) {
             return 2;
         }
         if (code.equals("e") || libelle.contains("essence")) {
