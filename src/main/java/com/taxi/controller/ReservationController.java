@@ -30,6 +30,43 @@ import com.taxi.model.Trajet;
 @RestController
 public class ReservationController {
 
+    public static class ReservationPortion {
+        private Reservation reservation;
+        private int placesAssignees;
+
+        public ReservationPortion(Reservation reservation, int placesAssignees) {
+            this.reservation = reservation;
+            this.placesAssignees = placesAssignees;
+        }
+
+        public Reservation getReservation() {
+            return reservation;
+        }
+
+        public int getPlacesAssignees() {
+            return placesAssignees;
+        }
+    }
+
+    public static class SplitAssignationResult {
+        private Map<String, List<ReservationPortion>> portionsParVehicule;
+        private Map<String, Integer> reliquatsParReservation;
+
+        public SplitAssignationResult(Map<String, List<ReservationPortion>> portionsParVehicule,
+                Map<String, Integer> reliquatsParReservation) {
+            this.portionsParVehicule = portionsParVehicule;
+            this.reliquatsParReservation = reliquatsParReservation;
+        }
+
+        public Map<String, List<ReservationPortion>> getPortionsParVehicule() {
+            return portionsParVehicule;
+        }
+
+        public Map<String, Integer> getReliquatsParReservation() {
+            return reliquatsParReservation;
+        }
+    }
+
     @GetMapping("/BackOf-taxi/api/reservations")
     public List<Reservation> listReservations() throws Exception {
         try (Connection conn = DBConnection.getConnection()) {
@@ -125,6 +162,157 @@ public class ReservationController {
         mv.addObject("pageTitle", "Assignation par Véhicule");
         prepareAssignationData(mv, date);
         return mv;
+    }
+
+    @GetMapping("/BackOf-taxi/reservation/assignation-vehicule-split")
+    public ModelAndView assignationVehiculeSplit(@Param("date") String date) throws Exception {
+        ModelAndView mv = new ModelAndView("/views/reservation/assignationVehiculeSplit.jsp");
+        mv.addObject("pageTitle", "Assignation fractionnée par Véhicule");
+
+        try (Connection conn = DBConnection.getConnection()) {
+            List<Reservation> allReservations = Reservation.getAll(Reservation.class, conn);
+            List<Vehicule> vehicules = Vehicule.getAll(Vehicule.class, conn);
+            List<TypeCarburant> types = TypeCarburant.getAll(TypeCarburant.class, conn);
+            List<Hotel> hotels = Hotel.getAll(Hotel.class, conn);
+
+            Map<String, TypeCarburant> typeById = construireMapType(types);
+            Map<String, Hotel> hotelMap = construireMapHotel(hotels);
+
+            Map<String, Integer> tripCountByVehicule = compterTrajetsDuJour(conn, date);
+
+            List<Reservation> filtered = filtrerReservations(allReservations, date);
+
+            // IMPORTANT: Pour le mode Split, on conserve un ordre déterministe (pas le tri "ancien algo")
+            // afin de permettre des cas de fractionnement attendus (r1 puis r2 puis r3, etc.).
+            filtered.sort((a, b) -> {
+                if (a.getDateResa() == null && b.getDateResa() == null) {
+                    return safe(a.getIdReservation()).compareTo(safe(b.getIdReservation()));
+                }
+                if (a.getDateResa() == null)
+                    return 1;
+                if (b.getDateResa() == null)
+                    return -1;
+                int cmp = a.getDateResa().compareTo(b.getDateResa());
+                if (cmp != 0)
+                    return cmp;
+                return safe(a.getIdReservation()).compareTo(safe(b.getIdReservation()));
+            });
+
+            List<Vehicule> vehiculesOrdonnes = new ArrayList<>(vehicules);
+            vehiculesOrdonnes.sort((v1, v2) -> comparerVehiculesPourSplit(v1, v2, typeById, tripCountByVehicule));
+
+            SplitAssignationResult split = assignerVehiculesFractionne(vehiculesOrdonnes, filtered);
+
+            mv.addObject("reservations", filtered);
+            mv.addObject("vehicules", vehicules);
+            mv.addObject("types", types);
+            mv.addObject("typeById", typeById);
+            mv.addObject("hotelMap", hotelMap);
+            mv.addObject("selectedDate", date);
+            mv.addObject("splitPortions", split.getPortionsParVehicule());
+            mv.addObject("splitReliquats", split.getReliquatsParReservation());
+        }
+
+        return mv;
+    }
+
+    private Map<String, Integer> compterTrajetsDuJour(Connection conn, String date) {
+        Map<String, Integer> count = new HashMap<>();
+        if (date == null || date.isEmpty()) {
+            return count;
+        }
+        try {
+            Timestamp start = Timestamp.valueOf(date + " 00:00:00");
+            Timestamp end = Timestamp.valueOf(date + " 23:59:59");
+            List<Assignation> assignations = Assignation.getAll(Assignation.class, conn);
+            for (Assignation a : assignations) {
+                if (a.getDateAssignation() == null)
+                    continue;
+                if (a.getDateAssignation().before(start) || a.getDateAssignation().after(end))
+                    continue;
+                if (a.getIdVehicule() == null)
+                    continue;
+                count.put(a.getIdVehicule(), count.getOrDefault(a.getIdVehicule(), 0) + 1);
+            }
+        } catch (Exception e) {
+            // On laisse le compteur vide si une erreur survient, pour ne pas casser l'affichage split.
+            e.printStackTrace();
+        }
+        return count;
+    }
+
+    private int comparerVehiculesPourSplit(Vehicule v1, Vehicule v2, Map<String, TypeCarburant> typeById,
+            Map<String, Integer> tripCountByVehicule) {
+        if (v1 == null && v2 == null)
+            return 0;
+        if (v1 == null)
+            return 1;
+        if (v2 == null)
+            return -1;
+
+        TypeCarburant t1 = typeById != null ? typeById.get(v1.getIdTypeCarburant()) : null;
+        TypeCarburant t2 = typeById != null ? typeById.get(v2.getIdTypeCarburant()) : null;
+
+        int diesel1 = (t1 != null && t1.getCode() != null && t1.getCode().equalsIgnoreCase("D")) ? 1 : 0;
+        int diesel2 = (t2 != null && t2.getCode() != null && t2.getCode().equalsIgnoreCase("D")) ? 1 : 0;
+
+        // 1) Diesel d'abord
+        if (diesel1 != diesel2)
+            return Integer.compare(diesel2, diesel1);
+
+        // 2) Moins de trajets effectués dans la journée
+        int trips1 = tripCountByVehicule != null ? tripCountByVehicule.getOrDefault(v1.getIdVehicule(), 0) : 0;
+        int trips2 = tripCountByVehicule != null ? tripCountByVehicule.getOrDefault(v2.getIdVehicule(), 0) : 0;
+        if (trips1 != trips2)
+            return Integer.compare(trips1, trips2);
+
+        // 3) Plus petite capacité (économiser les gros véhicules)
+        int cap1 = v1.getNbrPlace() != null ? v1.getNbrPlace() : Integer.MAX_VALUE;
+        int cap2 = v2.getNbrPlace() != null ? v2.getNbrPlace() : Integer.MAX_VALUE;
+        if (cap1 != cap2)
+            return Integer.compare(cap1, cap2);
+
+        // 4) Stable: idVehicule
+        return safe(v1.getIdVehicule()).compareTo(safe(v2.getIdVehicule()));
+    }
+
+    private String safe(String s) {
+        return s == null ? "" : s;
+    }
+
+    private SplitAssignationResult assignerVehiculesFractionne(List<Vehicule> vehicules, List<Reservation> reservations) {
+        Map<String, Integer> capaciteRestante = new HashMap<>();
+        for (Vehicule v : vehicules) {
+            capaciteRestante.put(v.getIdVehicule(), v.getNbrPlace() != null ? v.getNbrPlace() : 0);
+        }
+
+        Map<String, List<ReservationPortion>> portionsParVehicule = new HashMap<>();
+        Map<String, Integer> reliquatsParReservation = new HashMap<>();
+
+        for (Reservation r : reservations) {
+            int reste = r.getNbrPassager() != null ? r.getNbrPassager() : 0;
+            for (Vehicule v : vehicules) {
+                if (reste <= 0) {
+                    break;
+                }
+                int cap = capaciteRestante.getOrDefault(v.getIdVehicule(), 0);
+                if (cap <= 0) {
+                    continue;
+                }
+                int pris = Math.min(cap, reste);
+                capaciteRestante.put(v.getIdVehicule(), cap - pris);
+                reste -= pris;
+
+                portionsParVehicule.computeIfAbsent(v.getIdVehicule(), k -> new ArrayList<>())
+                        .add(new ReservationPortion(r, pris));
+            }
+
+            if (reste > 0) {
+                reliquatsParReservation.put(r.getIdReservation(), reste);
+            }
+        }
+
+        return new SplitAssignationResult(portionsParVehicule, reliquatsParReservation);
     }
 
     @PostMapping("/BackOf-taxi/reservation/save-assignation")

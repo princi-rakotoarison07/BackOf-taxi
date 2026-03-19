@@ -1,1 +1,3 @@
 com\taxi\model\Trajet.class
+com\taxi\controller\ReservationController$ReservationPortion.class
+com\taxi\controller\ReservationController$SplitAssignationResult.class

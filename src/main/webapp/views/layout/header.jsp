@@ -229,6 +229,9 @@
                 <a href="${pageContext.request.contextPath}/BackOf-taxi/reservation/assignation-vehicule" class="nav-link ps-5 py-2 small <%= request.getServletPath().contains("reservation/assignationVehicule.jsp") ? "fw-bold text-primary" : "" %>">
                     <i class="fas fa-car me-2" style="font-size: 0.8rem;"></i> Par Véhicule
                 </a>
+                <a href="${pageContext.request.contextPath}/BackOf-taxi/reservation/assignation-vehicule-split" class="nav-link ps-5 py-2 small <%= request.getServletPath().contains("reservation/assignationVehiculeSplit.jsp") ? "fw-bold text-primary" : "" %>">
+                    <i class="fas fa-random me-2" style="font-size: 0.8rem;"></i> Par Véhicule (Split)
+                </a>
                 <a href="${pageContext.request.contextPath}/BackOf-taxi/reservation/assignations" class="nav-link ps-5 py-2 small <%= request.getRequestURI().contains("reservation/assignations") ? "fw-bold text-primary" : "" %>">
                     <i class="fas fa-clipboard-list me-2" style="font-size: 0.8rem;"></i> Liste Validée
                 </a>
