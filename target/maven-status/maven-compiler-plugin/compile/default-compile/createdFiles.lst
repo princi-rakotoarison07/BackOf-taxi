@@ -1,4 +1,6 @@
 com\taxi\controller\HomeController.class
+com\taxi\controller\VehiculeController$AffectationVehicule.class
+com\taxi\controller\ReservationController$AffectationVehicule.class
 com\taxi\model\Distance.class
 com\taxi\model\Hotel.class
 com\taxi\model\Vehicule.class
