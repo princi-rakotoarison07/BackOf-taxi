@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.HashMap;
 import java.math.RoundingMode;
 import java.math.BigDecimal;
+import com.taxi.model.Trajet;
 
 @Controller
 @RestController
@@ -142,6 +143,25 @@ public class ReservationController {
             assignation.insert(conn);
             result.put("status", "success");
             result.put("message", "Assignation enregistrée !");
+        } catch (Exception e) {
+            e.printStackTrace();
+            result.put("status", "error");
+            result.put("message", "Erreur lors de l'enregistrement : " + e.getMessage());
+        }
+        return result;
+    }
+
+    @PostMapping("/BackOf-taxi/reservation/save-trajet")
+    public Map<String, Object> saveTrajet(@ModelAttribute Trajet trajet) {
+        Map<String, Object> result = new HashMap<>();
+        try (Connection conn = DBConnection.getConnection()) {
+            if (trajet.getDateTrajet() == null && trajet.getHeureDepartAeroport() != null) {
+                trajet.setDateTrajet(trajet.getHeureDepartAeroport());
+            }
+
+            trajet.insert(conn);
+            result.put("status", "success");
+            result.put("message", "Trajet enregistré !");
         } catch (Exception e) {
             e.printStackTrace();
             result.put("status", "error");

@@ -127,6 +127,16 @@
                                         if (r.getNbrPassager() != null) totalPax += r.getNbrPassager();
                                     }
                                     int availableSeats = (v != null && v.getNbrPlace() != null) ? (v.getNbrPlace() - totalPax) : 0;
+
+                                    String depRaw = "";
+                                    String arrRaw = "";
+                                    if (assignedResas != null && !assignedResas.isEmpty() && departureTimes != null && arrivalTimes != null) {
+                                        String firstId = assignedResas.get(0).getIdReservation();
+                                        java.sql.Timestamp depTs = departureTimes.get(firstId);
+                                        java.sql.Timestamp arrTs = arrivalTimes.get(firstId);
+                                        depRaw = depTs != null ? new java.sql.Timestamp(depTs.getTime()).toString().substring(0, 19) : "";
+                                        arrRaw = arrTs != null ? new java.sql.Timestamp(arrTs.getTime()).toString().substring(0, 19) : "";
+                                    }
                         %>
                         <tr class="bg-white">
                             <td class="text-center">
@@ -149,6 +159,15 @@
                                 <span class="badge <%= availableSeats > 0 ? "bg-success-soft text-success" : "bg-danger-soft text-danger" %>">
                                     <%= availableSeats %> places
                                 </span>
+
+                                <button class="btn btn-sm btn-primary rounded-circle ms-2 btn-trajet"
+                                        title="Enregistrer le trajet"
+                                        data-vehicule="<%= vId %>"
+                                        data-date="<%= selectedDate %>"
+                                        data-dep="<%= depRaw %>"
+                                        data-arr="<%= arrRaw %>">
+                                    <i class="fas fa-save"></i>
+                                </button>
                             </td>
                         </tr>
                         <tr class="collapse" id="<%= collapseId %>">
@@ -214,7 +233,7 @@
                                             </div>
                                             <div class="px-2 border-start text-end" style="width: 140px;">
                                                 <span class="badge bg-primary rounded-pill me-2"><%= currentResa.getNbrPassager() %> pers</span>
-                                                <button class="btn btn-sm btn-success rounded-circle btn-assign" 
+                                                <button class="btn btn-sm btn-link text-muted p-0 ms-2 btn-assign" 
                                                         title="Enregistrer l'assignation"
                                                         data-vehicule="<%= vId %>"
                                                         data-reservation="<%= currentResa.getIdReservation() %>"
@@ -223,7 +242,7 @@
                                                         data-dep="<%= times != null && times.get(currentResa.getIdReservation() + "_departure") != null ? new java.sql.Timestamp(times.get(currentResa.getIdReservation() + "_departure").getTime()).toString().substring(0, 19) : "" %>"
                                                         data-arr="<%= times != null && times.get(currentResa.getIdReservation() + "_arrival") != null ? new java.sql.Timestamp(times.get(currentResa.getIdReservation() + "_arrival").getTime()).toString().substring(0, 19) : "" %>"
                                                         data-num="<%= i + 1 %>">
-                                                    <i class="fas fa-save"></i>
+                                                    <i class="fas fa-save opacity-50"></i>
                                                 </button>
                                             </div>
                                         </div>
@@ -325,7 +344,63 @@
                 .then(response => response.json())
                 .then(res => {
                     if (res.status === 'success') {
-                        this.classList.replace('btn-success', 'btn-secondary');
+                        this.classList.add('text-secondary');
+                        this.innerHTML = '<i class="fas fa-check opacity-50"></i>';
+                        this.title = 'Déjà enregistré';
+                        alert(res.message);
+                    } else {
+                        alert('Erreur: ' + res.message);
+                        this.disabled = false;
+                        this.innerHTML = originalHtml;
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert('Erreur réseau');
+                    this.disabled = false;
+                    this.innerHTML = originalHtml;
+                });
+            });
+        });
+
+        const trajetButtons = document.querySelectorAll('.btn-trajet');
+        trajetButtons.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const data = this.dataset;
+                const formData = new URLSearchParams();
+                formData.append('idVehicule', data.vehicule);
+
+                const dateTrajet = data.date && data.date !== 'null' ? data.date + ' 00:00:00' : '';
+                if (dateTrajet) {
+                    formData.append('dateTrajet', dateTrajet);
+                }
+
+                const dep = data.dep || '';
+                const arr = data.arr || '';
+
+                if (!dep || !arr) {
+                    alert("Impossible d'enregistrer: horaires manquants.");
+                    return;
+                }
+
+                formData.append('heureDepartAeroport', dep);
+                formData.append('heureArriveeAeroport', arr);
+
+                const originalHtml = this.innerHTML;
+                this.disabled = true;
+                this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+                fetch('${pageContext.request.contextPath}/BackOf-taxi/reservation/save-trajet', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(res => {
+                    if (res.status === 'success') {
+                        this.classList.replace('btn-primary', 'btn-secondary');
                         this.innerHTML = '<i class="fas fa-check"></i>';
                         this.title = 'Déjà enregistré';
                         alert(res.message);

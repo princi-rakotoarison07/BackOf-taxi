@@ -24,3 +24,20 @@ CREATE TABLE assignation (
 -- Index pour accélérer les recherches par véhicule et par date
 CREATE INDEX idx_assignation_vehicule_date ON assignation(id_vehicule, date_assignation);
 CREATE INDEX idx_assignation_reservation ON assignation(id_reservation);
+
+ DROP TABLE IF EXISTS trajet CASCADE;
+ 
+ DROP SEQUENCE IF EXISTS seq_trajet;
+ CREATE SEQUENCE seq_trajet;
+ 
+ CREATE TABLE trajet (
+     id_trajet VARCHAR(50) PRIMARY KEY,
+     id_vehicule VARCHAR(50) NOT NULL,
+     date_trajet TIMESTAMP NOT NULL,
+     heure_depart_aeroport TIMESTAMP NOT NULL,
+     heure_arrivee_aeroport TIMESTAMP NOT NULL,
+     CONSTRAINT fk_trajet_vehicule FOREIGN KEY (id_vehicule) REFERENCES vehicule(id_vehicule) ON UPDATE CASCADE ON DELETE RESTRICT,
+     CONSTRAINT uq_trajet_vehicule_slot UNIQUE (id_vehicule, heure_depart_aeroport, heure_arrivee_aeroport)
+ );
+ 
+ CREATE INDEX idx_trajet_vehicule_date ON trajet(id_vehicule, date_trajet);
