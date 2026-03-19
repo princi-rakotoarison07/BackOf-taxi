@@ -114,11 +114,11 @@
 <div class="container-fluid">
     <div class="d-flex align-items-center justify-content-between mb-4">
         <div>
-            <h3 class="fw-bold mb-0">Assignation par Véhicule</h3>
+            <h3 class="fw-bold mb-0">Planning</h3>
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb mb-0">
                     <li class="breadcrumb-item"><a href="${pageContext.request.contextPath}/BackOf-taxi/reservation/form" class="text-decoration-none">Réservations</a></li>
-                    <li class="breadcrumb-item active">Assignation par Véhicule</li>
+                    <li class="breadcrumb-item active">Planning</li>
                 </ol>
             </nav>
         </div>
