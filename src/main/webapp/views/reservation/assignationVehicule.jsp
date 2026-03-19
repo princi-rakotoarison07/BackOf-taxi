@@ -27,6 +27,7 @@
     Map<String, Hotel> hotelMap = (Map<String, Hotel>) request.getAttribute("hotelMap");
     Map<String, List<Reservation>> tourOrders = (Map<String, List<Reservation>>) request.getAttribute("tourOrders");
     Map<String, Map<String, java.sql.Timestamp>> detailedTimes = (Map<String, Map<String, java.sql.Timestamp>>) request.getAttribute("detailedTimes");
+    Map<String, java.math.BigDecimal> tourDistancesKm = (Map<String, java.math.BigDecimal>) request.getAttribute("tourDistancesKm");
 
     Map<String, TypeCarburant> typeById = new HashMap<>();
     if (types != null) {
@@ -95,13 +96,11 @@
                 <table class="table align-middle mb-0">
                     <thead class="bg-light text-muted">
                         <tr>
-                            <th style="width: 50px;"></th>
-                            <th>Véhicule</th>
-                            <th>Capacité</th>
-                            <th>Carburant</th>
-                            <th>Départ Aéroport</th>
-                            <th>Retour Aéroport</th>
-                            <th>Places Disponibles</th>
+                            <th>h_depart</th>
+                            <th>vehicule</th>
+                            <th>liste_resa_hotel</th>
+                            <th>km_parcouru</th>
+                            <th>h_retour</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -109,7 +108,6 @@
                             boolean hasAssignments = false;
                             if (!slotToResa.isEmpty()) {
                                 hasAssignments = true;
-                                int count = 0;
                                 for (Map.Entry<String, List<Reservation>> entry : slotToResa.entrySet()) {
                                     String key = entry.getKey();
                                     List<Reservation> assignedResas = entry.getValue();
@@ -120,129 +118,37 @@
                                     
                                     Vehicule v = vehiculeMap.get(vId);
                                     TypeCarburant t = v != null ? typeById.get(v.getIdTypeCarburant()) : null;
-                                    String collapseId = "collapse-" + (count++);
-
-                                    int totalPax = 0;
-                                    for (Reservation r : assignedResas) {
-                                        if (r.getNbrPassager() != null) totalPax += r.getNbrPassager();
-                                    }
-                                    int availableSeats = (v != null && v.getNbrPlace() != null) ? (v.getNbrPlace() - totalPax) : 0;
+                                    List<Reservation> orderedTour = (tourOrders != null && tourOrders.containsKey(key)) ? tourOrders.get(key) : assignedResas;
+                                    java.math.BigDecimal distanceKm = (tourDistancesKm != null && tourDistancesKm.containsKey(key)) ? tourDistancesKm.get(key) : java.math.BigDecimal.ZERO;
                         %>
                         <tr class="bg-white">
-                            <td class="text-center">
-                                <button class="btn btn-sm btn-outline-primary rounded-circle" type="button" 
-                                        data-bs-toggle="collapse" data-bs-target="#<%= collapseId %>" 
-                                        aria-expanded="false" style="width: 30px; height: 30px; padding: 0;">
-                                    <i class="fas fa-plus"></i>
-                                </button>
-                            </td>
-                            <td><span class="fw-bold text-primary"><%= vId %></span></td>
-                            <td><%= v != null && v.getNbrPlace() != null ? v.getNbrPlace() : "-" %></td>
-                            <td>
-                                <span class="badge bg-indigo-soft text-primary">
-                                    <i class="fas fa-gas-pump me-1"></i><%= t != null ? t.getLibelle() : "-" %>
-                                </span>
-                            </td>
                             <td><%= depTime %></td>
-                            <td><%= arrTime %></td>
                             <td>
-                                <span class="badge <%= availableSeats > 0 ? "bg-success-soft text-success" : "bg-danger-soft text-danger" %>">
-                                    <%= availableSeats %> places
-                                </span>
-                            </td>
-                        </tr>
-                        <tr class="collapse" id="<%= collapseId %>">
-                            <td colspan="7" class="p-0">
-                                <div class="bg-light p-3 border-top border-bottom">
-                                    <%
-                                        // Récupérer l'ordre de cette tournée
-                                        String tourKey = key; // Utiliser la clé complète (vId|depTime|arrTime)
-                                        List<Reservation> orderedTour = (tourOrders != null && tourOrders.containsKey(tourKey)) ? tourOrders.get(tourKey) : assignedResas;
-                                        Map<String, java.sql.Timestamp> times = (detailedTimes != null) ? detailedTimes.get(tourKey) : null;
-                                        
-                                        java.text.SimpleDateFormat timeFormat = new java.text.SimpleDateFormat("HH:mm");
-                                        
-                                        if (orderedTour != null && !orderedTour.isEmpty()) {
-                                            // L'heure de départ prévue à l'aéroport pour toute la tournée
-                                            String airportPrevu = depTime.contains(" ") ? depTime.split(" ")[1] : depTime;
-                                    %>
-                                    <div class="tour-details">
-                                        <%
-                                            for (int i = 0; i < orderedTour.size(); i++) {
-                                                Reservation currentResa = orderedTour.get(i);
-                                                Hotel currentHotel = hotelMap != null ? hotelMap.get(currentResa.getIdHotel()) : null;
-                                                String hotelName = currentHotel != null ? currentHotel.getNomHotel() : currentResa.getIdHotel();
-
-                                                // Déterminer le trajet
-                                                String fromLoc = "Aéroport";
-                                                if (i > 0) {
-                                                    Reservation prevResa = orderedTour.get(i-1);
-                                                    Hotel prevHotel = hotelMap != null ? hotelMap.get(prevResa.getIdHotel()) : null;
-                                                    fromLoc = prevHotel != null ? prevHotel.getNomHotel() : prevResa.getIdHotel();
-                                                }
-                                                String toLoc = hotelName;
-
-                                                // Récupérer les horaires
-                                                String legDep = "-";
-                                                String legArr = "-";
-                                                
-                                                if (times != null) {
-                                                    java.sql.Timestamp tDep = times.get(currentResa.getIdReservation() + "_departure");
-                                                    java.sql.Timestamp tArr = times.get(currentResa.getIdReservation() + "_arrival");
-                                                    if (tDep != null) legDep = timeFormat.format(tDep);
-                                                    if (tArr != null) legArr = timeFormat.format(tArr);
-                                                }
-                                        %>
-                                        <div class="d-flex align-items-center py-2 px-3 border-bottom bg-white mb-1 rounded shadow-sm small">
-                                            <div class="fw-bold text-primary" style="width: 70px;"><%= currentResa.getIdClient() %></div>
-                                            <div class="flex-grow-1" style="min-width: 200px;">
-                                                <span class="text-muted"><%= fromLoc %></span>
-                                                <i class="fas fa-long-arrow-alt-right mx-2 text-primary opacity-50"></i>
-                                                <span class="fw-bold"><%= toLoc %></span>
-                                            </div>
-                                            <div class="px-2 border-start text-center" style="width: 160px;">
-                                                <small class="text-muted">Prévu Aéroport</small>
-                                                <div class="fw-bold"><%= airportPrevu %></div>
-                                            </div>
-                                            <div class="px-2 border-start text-center" style="width: 120px;">
-                                                <small class="text-muted">Départ</small>
-                                                <div class="fw-bold text-primary"><%= legDep %></div>
-                                            </div>
-                                            <div class="px-2 border-start text-center" style="width: 120px;">
-                                                <small class="text-muted">Arrivée</small>
-                                                <div class="fw-bold text-success"><%= legArr %></div>
-                                            </div>
-                                            <div class="px-2 border-start text-end" style="width: 90px;">
-                                                <span class="badge bg-primary rounded-pill"><%= currentResa.getNbrPassager() %> pers</span>
-                                            </div>
-                                        </div>
-                                        <% } %>
-                                        
-                                        <%
-                                            // Retour final à l'aéroport
-                                            String finalReturn = "-";
-                                            String lastLoc = "Aéroport";
-                                            if (!orderedTour.isEmpty()) {
-                                                Reservation lastResa = orderedTour.get(orderedTour.size() - 1);
-                                                Hotel h = hotelMap.get(lastResa.getIdHotel());
-                                                lastLoc = h != null ? h.getNomHotel() : lastResa.getIdHotel();
-                                            }
-
-                                            if (times != null && times.containsKey("return_arrival")) {
-                                                finalReturn = timeFormat.format(times.get("return_arrival"));
-                                            } else {
-                                                finalReturn = arrTime.contains(" ") ? arrTime.split(" ")[1] : arrTime;
-                                            }
-                                        %>
-                                        <div class="mt-2 text-end pe-3">
-                                            <span class="text-muted small">Retour à l'aéroport : </span>
-                                            <span class="fw-bold text-danger"><%= finalReturn %></span>
-                                            <span class="text-muted small ms-1">(<%= lastLoc %> → Aéroport)</span>
-                                        </div>
-                                    </div>
-                                    <% } %>
+                                <div class="fw-bold text-primary"><%= vId %></div>
+                                <div class="small text-muted">
+                                    <%= t != null ? t.getLibelle() : "-" %>
+                                    <%= v != null && v.getNbrPlace() != null ? " | " + v.getNbrPlace() + " places" : "" %>
                                 </div>
                             </td>
+                            <td>
+                                <ul class="mb-0 ps-3 small">
+                                    <%
+                                        if (orderedTour != null && !orderedTour.isEmpty()) {
+                                            for (Reservation currentResa : orderedTour) {
+                                                Hotel currentHotel = hotelMap != null ? hotelMap.get(currentResa.getIdHotel()) : null;
+                                                String hotelName = currentHotel != null ? currentHotel.getNomHotel() : currentResa.getIdHotel();
+                                    %>
+                                    <li><strong><%= currentResa.getIdReservation() %></strong> - <%= hotelName %> (<%= currentResa.getNbrPassager() %> pax)</li>
+                                    <%
+                                            }
+                                        }
+                                    %>
+                                </ul>
+                            </td>
+                            <td>
+                                <span class="fw-bold"><%= distanceKm.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString() %> km</span>
+                            </td>
+                            <td><%= arrTime %></td>
                         </tr>
                         <%
                                 }
@@ -250,7 +156,7 @@
                             if (!hasAssignments) {
                         %>
                         <tr>
-                            <td colspan="7" class="text-center py-5">
+                            <td colspan="5" class="text-center py-5">
                                 <div class="text-muted">
                                     <i class="fas fa-calendar-check fa-3x mb-3 opacity-25"></i>
                                     <p class="mb-0">Aucun véhicule n'a de réservation pour cette date.</p>
@@ -264,24 +170,5 @@
         </div>
     </div>
 </div>
-
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Toggle icon plus/minus on collapse
-        const collapses = document.querySelectorAll('.collapse');
-        collapses.forEach(el => {
-            el.addEventListener('show.bs.collapse', function () {
-                const btn = document.querySelector(`[data-bs-target="#${el.id}"]`);
-                btn.innerHTML = '<i class="fas fa-minus"></i>';
-                btn.classList.replace('btn-outline-primary', 'btn-primary');
-            });
-            el.addEventListener('hide.bs.collapse', function () {
-                const btn = document.querySelector(`[data-bs-target="#${el.id}"]`);
-                btn.innerHTML = '<i class="fas fa-plus"></i>';
-                btn.classList.replace('btn-primary', 'btn-outline-primary');
-            });
-        });
-    });
-</script>
 
 <jsp:include page="../layout/footer.jsp" />
