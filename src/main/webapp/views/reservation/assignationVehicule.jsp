@@ -220,8 +220,8 @@
                                                         data-reservation="<%= currentResa.getIdReservation() %>"
                                                         data-pax="<%= currentResa.getNbrPassager() %>"
                                                         data-date="<%= selectedDate %>"
-                                                        data-dep="<%= times != null && times.get(currentResa.getIdReservation() + "_departure") != null ? new java.sql.Timestamp(times.get(currentResa.getIdReservation() + "_departure").getTime()).toString().replace(" ", "T").substring(0, 16) : "" %>"
-                                                        data-arr="<%= times != null && times.get(currentResa.getIdReservation() + "_arrival") != null ? new java.sql.Timestamp(times.get(currentResa.getIdReservation() + "_arrival").getTime()).toString().replace(" ", "T").substring(0, 16) : "" %>"
+                                                        data-dep="<%= times != null && times.get(currentResa.getIdReservation() + "_departure") != null ? new java.sql.Timestamp(times.get(currentResa.getIdReservation() + "_departure").getTime()).toString().substring(0, 19) : "" %>"
+                                                        data-arr="<%= times != null && times.get(currentResa.getIdReservation() + "_arrival") != null ? new java.sql.Timestamp(times.get(currentResa.getIdReservation() + "_arrival").getTime()).toString().substring(0, 19) : "" %>"
                                                         data-num="<%= i + 1 %>">
                                                     <i class="fas fa-save"></i>
                                                 </button>
@@ -304,11 +304,11 @@
                 formData.append('nbrPassager', data.pax);
                 
                 // Utiliser la date du trajet si selectedDate est vide
-                const assignDate = data.date && data.date !== 'null' ? data.date : data.dep.substring(0, 10);
-                formData.append('dateAssignation', assignDate + ' 00:00:00');
+                const assignDate = data.date && data.date !== 'null' ? data.date + ' 00:00:00' : data.dep;
+                formData.append('dateAssignation', assignDate);
                 
-                formData.append('heureDepartPrevue', data.dep + ':00');
-                formData.append('heureArriveePrevue', data.arr + ':00');
+                formData.append('heureDepartPrevue', data.dep);
+                formData.append('heureArriveePrevue', data.arr);
                 formData.append('numTrajet', data.num);
 
                 const originalHtml = this.innerHTML;

@@ -13,7 +13,7 @@ CREATE TABLE assignation (
     id_vehicule VARCHAR(50) NOT NULL,
     id_reservation VARCHAR(50) NOT NULL,
     nbr_passager INTEGER NOT NULL CHECK (nbr_passager > 0), -- Nombre de passagers de la réservation affectés à ce véhicule
-    date_assignation DATE NOT NULL,
+    date_assignation TIMESTAMP NOT NULL,
     heure_depart_prevue TIMESTAMP NOT NULL,
     heure_arrivee_prevue TIMESTAMP NOT NULL,
     num_trajet INTEGER NOT NULL DEFAULT 1, -- Indique s'il s'agit du 1er, 2ème... trajet du véhicule ce jour-là

@@ -156,9 +156,7 @@ public class ModelBinder {
             if (type == java.sql.Timestamp.class) {
                 // Handle standard format or HTML5 datetime-local (T instead of space)
                 String normalized = raw.replace("T", " ");
-                if (normalized.length() == 10) { // yyyy-MM-dd
-                    normalized += " 00:00:00";
-                } else if (normalized.length() == 16) { // yyyy-MM-dd HH:mm
+                if (normalized.length() == 16) { // yyyy-MM-dd HH:mm
                     normalized += ":00";
                 }
                 return java.sql.Timestamp.valueOf(normalized);

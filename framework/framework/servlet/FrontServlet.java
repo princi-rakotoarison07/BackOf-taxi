@@ -271,11 +271,7 @@ public class FrontServlet extends HttpServlet {
             if (targetType == char.class || targetType == Character.class) return raw.isEmpty() ? '\0' : raw.charAt(0);
             if (targetType == java.sql.Timestamp.class) {
                 String normalized = raw.replace("T", " ");
-                if (normalized.length() == 10) { // yyyy-MM-dd
-                    normalized += " 00:00:00";
-                } else if (normalized.length() == 16) { // yyyy-MM-dd HH:mm
-                    normalized += ":00";
-                }
+                if (normalized.length() == 16) normalized += ":00";
                 return java.sql.Timestamp.valueOf(normalized);
             }
             if (targetType.isEnum()) {
