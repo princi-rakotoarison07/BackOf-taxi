@@ -1,3 +1,17 @@
+com\taxi\controller\HomeController.class
+com\taxi\model\Distance.class
+com\taxi\model\Assignation.class
+com\taxi\model\Hotel.class
+com\taxi\model\Vehicule.class
 com\taxi\model\Trajet.class
+com\taxi\model\TypeCarburant.class
+com\taxi\controller\HotelController.class
+com\taxi\model\Parametre.class
+com\taxi\controller\ParametreController.class
+com\taxi\controller\VehiculeController$Tournee.class
+com\taxi\controller\ReservationController.class
 com\taxi\controller\ReservationController$ReservationPortion.class
+com\taxi\util\DBConnection.class
+com\taxi\model\Reservation.class
+com\taxi\controller\VehiculeController.class
 com\taxi\controller\ReservationController$SplitAssignationResult.class

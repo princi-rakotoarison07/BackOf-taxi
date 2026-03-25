@@ -51,11 +51,17 @@ public class ReservationController {
     public static class SplitAssignationResult {
         private Map<String, List<ReservationPortion>> portionsParVehicule;
         private Map<String, Integer> reliquatsParReservation;
+        private Map<String, Timestamp> departureTimesParVehicule;
+        private Map<String, Timestamp> returnTimesParVehicule;
 
         public SplitAssignationResult(Map<String, List<ReservationPortion>> portionsParVehicule,
-                Map<String, Integer> reliquatsParReservation) {
+                Map<String, Integer> reliquatsParReservation,
+                Map<String, Timestamp> departureTimesParVehicule,
+                Map<String, Timestamp> returnTimesParVehicule) {
             this.portionsParVehicule = portionsParVehicule;
             this.reliquatsParReservation = reliquatsParReservation;
+            this.departureTimesParVehicule = departureTimesParVehicule;
+            this.returnTimesParVehicule = returnTimesParVehicule;
         }
 
         public Map<String, List<ReservationPortion>> getPortionsParVehicule() {
@@ -64,6 +70,14 @@ public class ReservationController {
 
         public Map<String, Integer> getReliquatsParReservation() {
             return reliquatsParReservation;
+        }
+
+        public Map<String, Timestamp> getDepartureTimesParVehicule() {
+            return departureTimesParVehicule;
+        }
+
+        public Map<String, Timestamp> getReturnTimesParVehicule() {
+            return returnTimesParVehicule;
         }
     }
 
@@ -174,34 +188,33 @@ public class ReservationController {
             List<Vehicule> vehicules = Vehicule.getAll(Vehicule.class, conn);
             List<TypeCarburant> types = TypeCarburant.getAll(TypeCarburant.class, conn);
             List<Hotel> hotels = Hotel.getAll(Hotel.class, conn);
+            List<Distance> distances = Distance.getAll(Distance.class, conn);
+            List<Parametre> parametres = Parametre.getAll(Parametre.class, conn);
+            Parametre currentParam = (parametres != null && !parametres.isEmpty()) ? parametres.get(0) : null;
 
             Map<String, TypeCarburant> typeById = construireMapType(types);
             Map<String, Hotel> hotelMap = construireMapHotel(hotels);
+            Map<String, Map<String, Distance>> distanceMatrix = construireMatriceDistance(distances);
 
             Map<String, Integer> tripCountByVehicule = compterTrajetsDuJour(conn, date);
 
             List<Reservation> filtered = filtrerReservations(allReservations, date);
 
-            // IMPORTANT: Pour le mode Split, on conserve un ordre déterministe (pas le tri "ancien algo")
-            // afin de permettre des cas de fractionnement attendus (r1 puis r2 puis r3, etc.).
+            // Pour être cohérent avec l'ancien algo: trier comme assignationVehicule (plus récent, puis plus grand)
             filtered.sort((a, b) -> {
-                if (a.getDateResa() == null && b.getDateResa() == null) {
-                    return safe(a.getIdReservation()).compareTo(safe(b.getIdReservation()));
-                }
                 if (a.getDateResa() == null)
                     return 1;
                 if (b.getDateResa() == null)
                     return -1;
-                int cmp = a.getDateResa().compareTo(b.getDateResa());
-                if (cmp != 0)
-                    return cmp;
-                return safe(a.getIdReservation()).compareTo(safe(b.getIdReservation()));
+                int dateCompare = b.getDateResa().compareTo(a.getDateResa());
+                if (dateCompare != 0) {
+                    return dateCompare;
+                }
+                return b.getNbrPassager().compareTo(a.getNbrPassager());
             });
 
-            List<Vehicule> vehiculesOrdonnes = new ArrayList<>(vehicules);
-            vehiculesOrdonnes.sort((v1, v2) -> comparerVehiculesPourSplit(v1, v2, typeById, tripCountByVehicule));
-
-            SplitAssignationResult split = assignerVehiculesFractionne(vehiculesOrdonnes, filtered);
+            SplitAssignationResult split = assignerVehiculesFractionneAvecDisponibilite(filtered, vehicules, typeById,
+                    hotelMap, distanceMatrix, currentParam, tripCountByVehicule);
 
             mv.addObject("reservations", filtered);
             mv.addObject("vehicules", vehicules);
@@ -211,6 +224,8 @@ public class ReservationController {
             mv.addObject("selectedDate", date);
             mv.addObject("splitPortions", split.getPortionsParVehicule());
             mv.addObject("splitReliquats", split.getReliquatsParReservation());
+            mv.addObject("splitDepartureVehicule", split.getDepartureTimesParVehicule());
+            mv.addObject("splitReturnVehicule", split.getReturnTimesParVehicule());
         }
 
         return mv;
@@ -280,39 +295,230 @@ public class ReservationController {
         return s == null ? "" : s;
     }
 
-    private SplitAssignationResult assignerVehiculesFractionne(List<Vehicule> vehicules, List<Reservation> reservations) {
-        Map<String, Integer> capaciteRestante = new HashMap<>();
-        for (Vehicule v : vehicules) {
-            capaciteRestante.put(v.getIdVehicule(), v.getNbrPlace() != null ? v.getNbrPlace() : 0);
-        }
+    private SplitAssignationResult assignerVehiculesFractionneAvecDisponibilite(List<Reservation> reservations,
+            List<Vehicule> vehicules,
+            Map<String, TypeCarburant> typeById,
+            Map<String, Hotel> hotelMap,
+            Map<String, Map<String, Distance>> distanceMatrix,
+            Parametre param,
+            Map<String, Integer> tripCountByVehicule) {
 
         Map<String, List<ReservationPortion>> portionsParVehicule = new HashMap<>();
         Map<String, Integer> reliquatsParReservation = new HashMap<>();
+        Map<String, Timestamp> departureTimesParVehicule = new HashMap<>();
+        Map<String, Timestamp> returnTimesParVehicule = new HashMap<>();
 
+        // Etat véhicule: capacité restante + prochaine disponibilité
+        Map<Vehicule, Integer> remainingCapacity = new HashMap<>();
+        Map<Vehicule, Timestamp> nextFreeTime = new HashMap<>();
+        for (Vehicule v : vehicules) {
+            remainingCapacity.put(v, v.getNbrPlace() != null ? v.getNbrPlace() : 0);
+            nextFreeTime.put(v, new Timestamp(0));
+        }
+
+        // Grouper les réservations par minute, comme l'ancien algo
+        Map<Timestamp, List<Reservation>> groupedByTime = new HashMap<>();
         for (Reservation r : reservations) {
-            int reste = r.getNbrPassager() != null ? r.getNbrPassager() : 0;
-            for (Vehicule v : vehicules) {
-                if (reste <= 0) {
-                    break;
-                }
-                int cap = capaciteRestante.getOrDefault(v.getIdVehicule(), 0);
-                if (cap <= 0) {
-                    continue;
-                }
-                int pris = Math.min(cap, reste);
-                capaciteRestante.put(v.getIdVehicule(), cap - pris);
-                reste -= pris;
+            if (r.getDateResa() == null)
+                continue;
+            long timeMs = r.getDateResa().getTime();
+            Timestamp truncated = new Timestamp((timeMs / 60000L) * 60000L);
+            groupedByTime.computeIfAbsent(truncated, k -> new ArrayList<>()).add(r);
+        }
+        List<Timestamp> sortedTimes = new ArrayList<>(groupedByTime.keySet());
+        Collections.sort(sortedTimes);
 
-                portionsParVehicule.computeIfAbsent(v.getIdVehicule(), k -> new ArrayList<>())
-                        .add(new ReservationPortion(r, pris));
+        for (Timestamp t : sortedTimes) {
+            List<Reservation> group = groupedByTime.get(t);
+            if (group == null)
+                continue;
+
+            // Pour être cohérent avec l'ancien algo à l'intérieur du groupe
+            group.sort((a, b) -> {
+                if (a.getDateResa() == null)
+                    return 1;
+                if (b.getDateResa() == null)
+                    return -1;
+                int dateCompare = b.getDateResa().compareTo(a.getDateResa());
+                if (dateCompare != 0) {
+                    return dateCompare;
+                }
+                return b.getNbrPassager().compareTo(a.getNbrPassager());
+            });
+
+            // Trace pour calculer les tournées par véhicule sur ce créneau
+            Map<Vehicule, List<Reservation>> tourByVehicule = new HashMap<>();
+            List<Vehicule> usedVehiculeOrder = new ArrayList<>();
+
+            for (Reservation r : group) {
+                int reste = r.getNbrPassager() != null ? r.getNbrPassager() : 0;
+                if (reste <= 0)
+                    continue;
+
+                // 1) Essayer d'assigner toute la réservation à un seul véhicule (comme l'ancien)
+                Vehicule bestFull = trouverMeilleurVehiculePourGroupe(r, vehicules, remainingCapacity, nextFreeTime, t,
+                        typeById, convertirTrips(vehicules, tripCountByVehicule));
+                if (bestFull != null) {
+                    int pris = reste;
+                    remainingCapacity.put(bestFull, remainingCapacity.getOrDefault(bestFull, 0) - pris);
+                    portionsParVehicule.computeIfAbsent(bestFull.getIdVehicule(), k -> new ArrayList<>())
+                            .add(new ReservationPortion(r, pris));
+                    if (!tourByVehicule.containsKey(bestFull)) {
+                        usedVehiculeOrder.add(bestFull);
+                    }
+                    tourByVehicule.computeIfAbsent(bestFull, k -> new ArrayList<>()).add(r);
+                    reste = 0;
+                }
+
+                // 2) Si impossible de la mettre entière, on fractionne sur plusieurs véhicules disponibles
+                while (reste > 0) {
+                    // 2.a) Priorité: remplir d'abord les véhicules déjà engagés dans la tournée du créneau
+                    Vehicule bestPartial = trouverVehiculeEngageDisponible(usedVehiculeOrder, remainingCapacity,
+                            nextFreeTime, t);
+                    if (bestPartial == null) {
+                        // 2.b) Sinon, choisir un nouveau véhicule selon des critères proches de l'ancien
+                        bestPartial = trouverMeilleurVehiculePartiel(r, vehicules, remainingCapacity, nextFreeTime,
+                                t, typeById, tripCountByVehicule);
+                    }
+                    if (bestPartial == null)
+                        break;
+
+                    int cap = remainingCapacity.getOrDefault(bestPartial, 0);
+                    if (cap <= 0)
+                        break;
+
+                    int pris = Math.min(cap, reste);
+                    remainingCapacity.put(bestPartial, cap - pris);
+                    reste -= pris;
+
+                    portionsParVehicule.computeIfAbsent(bestPartial.getIdVehicule(), k -> new ArrayList<>())
+                            .add(new ReservationPortion(r, pris));
+                    if (!tourByVehicule.containsKey(bestPartial)) {
+                        usedVehiculeOrder.add(bestPartial);
+                    }
+                    tourByVehicule.computeIfAbsent(bestPartial, k -> new ArrayList<>()).add(r);
+                }
+
+                if (reste > 0) {
+                    reliquatsParReservation.put(r.getIdReservation(), reste);
+                }
             }
 
-            if (reste > 0) {
-                reliquatsParReservation.put(r.getIdReservation(), reste);
+            // Mettre à jour nextFreeTime comme l'ancien: durée tournée incluant retour
+            for (Map.Entry<Vehicule, List<Reservation>> e : tourByVehicule.entrySet()) {
+                Vehicule v = e.getKey();
+                List<Reservation> tour = e.getValue();
+                if (tour == null || tour.isEmpty())
+                    continue;
+
+                // Départ affiché = heure du créneau
+                departureTimesParVehicule.put(v.getIdVehicule(), t);
+
+                long durationMs = calculerDureeTournee(tour, hotelMap, distanceMatrix, param);
+                Timestamp returnTime = new Timestamp(t.getTime() + durationMs);
+                returnTimesParVehicule.put(v.getIdVehicule(), returnTime);
+                nextFreeTime.put(v, returnTime);
+
+                // incrémenter le compteur de trajets du jour
+                if (tripCountByVehicule != null && v.getIdVehicule() != null) {
+                    tripCountByVehicule.put(v.getIdVehicule(), tripCountByVehicule.getOrDefault(v.getIdVehicule(), 0) + 1);
+                }
             }
         }
 
-        return new SplitAssignationResult(portionsParVehicule, reliquatsParReservation);
+        return new SplitAssignationResult(portionsParVehicule, reliquatsParReservation, departureTimesParVehicule,
+                returnTimesParVehicule);
+    }
+
+    private Vehicule trouverVehiculeEngageDisponible(List<Vehicule> usedVehiculeOrder,
+            Map<Vehicule, Integer> remainingCapacity,
+            Map<Vehicule, Timestamp> nextFreeTime,
+            Timestamp currentTime) {
+        if (usedVehiculeOrder == null)
+            return null;
+        for (Vehicule v : usedVehiculeOrder) {
+            int cap = remainingCapacity != null ? remainingCapacity.getOrDefault(v, 0) : 0;
+            Timestamp freeTime = nextFreeTime != null ? nextFreeTime.getOrDefault(v, new Timestamp(0)) : new Timestamp(0);
+            if (cap > 0 && !freeTime.after(currentTime)) {
+                return v;
+            }
+        }
+        return null;
+    }
+
+    private Map<Vehicule, Integer> convertirTrips(List<Vehicule> vehicules, Map<String, Integer> tripCountByVehicule) {
+        Map<Vehicule, Integer> trips = new HashMap<>();
+        if (vehicules == null)
+            return trips;
+        for (Vehicule v : vehicules) {
+            int c = (tripCountByVehicule != null && v != null) ? tripCountByVehicule.getOrDefault(v.getIdVehicule(), 0) : 0;
+            trips.put(v, c);
+        }
+        return trips;
+    }
+
+    private Vehicule trouverMeilleurVehiculePartiel(Reservation r,
+            List<Vehicule> available,
+            Map<Vehicule, Integer> remainingCapacity,
+            Map<Vehicule, Timestamp> nextFreeTime,
+            Timestamp currentTime,
+            Map<String, TypeCarburant> typeById,
+            Map<String, Integer> tripCountByVehicule) {
+
+        Vehicule best = null;
+        double bestFillRate = -1.0;
+        int bestTotalCapacity = Integer.MAX_VALUE;
+        int bestTripCount = Integer.MAX_VALUE;
+        int bestScoreDiesel = -1;
+
+        for (Vehicule v : available) {
+            int cap = remainingCapacity.getOrDefault(v, 0);
+            Timestamp freeTime = nextFreeTime.getOrDefault(v, new Timestamp(0));
+            if (cap <= 0)
+                continue;
+            if (freeTime.after(currentTime))
+                continue;
+
+            int pris = Math.min(cap, r != null && r.getNbrPassager() != null ? r.getNbrPassager() : cap);
+            if (pris <= 0)
+                continue;
+
+            // Calculer un "fillRate" similaire à l'ancien algo avec une prise partielle
+            int occupiedAfter = v.getNbrPlace() - (cap - pris);
+            double fillRateAfter = (v.getNbrPlace() != null && v.getNbrPlace() > 0) ? (double) occupiedAfter / v.getNbrPlace() : 0.0;
+
+            TypeCarburant t = typeById != null ? typeById.get(v.getIdTypeCarburant()) : null;
+            int dieselScore = (t != null && t.getCode() != null && t.getCode().equalsIgnoreCase("D")) ? 1 : 0;
+            int trips = (tripCountByVehicule != null && v.getIdVehicule() != null)
+                    ? tripCountByVehicule.getOrDefault(v.getIdVehicule(), 0)
+                    : 0;
+
+            boolean better = false;
+            if (fillRateAfter > bestFillRate + 0.0001) {
+                better = true;
+            } else if (Math.abs(fillRateAfter - bestFillRate) < 0.0001) {
+                if (v.getNbrPlace() < bestTotalCapacity) {
+                    better = true;
+                } else if (v.getNbrPlace() == bestTotalCapacity) {
+                    if (trips < bestTripCount) {
+                        better = true;
+                    } else if (trips == bestTripCount) {
+                        if (dieselScore > bestScoreDiesel) {
+                            better = true;
+                        }
+                    }
+                }
+            }
+
+            if (better) {
+                best = v;
+                bestFillRate = fillRateAfter;
+                bestTotalCapacity = v.getNbrPlace() != null ? v.getNbrPlace() : Integer.MAX_VALUE;
+                bestTripCount = trips;
+                bestScoreDiesel = dieselScore;
+            }
+        }
+        return best;
     }
 
     @PostMapping("/BackOf-taxi/reservation/save-assignation")

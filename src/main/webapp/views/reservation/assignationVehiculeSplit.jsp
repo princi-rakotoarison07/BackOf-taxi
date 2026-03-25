@@ -17,10 +17,15 @@
     Map<String, List<ReservationPortion>> splitPortions = (Map<String, List<ReservationPortion>>) request.getAttribute("splitPortions");
     Map<String, Integer> splitReliquats = (Map<String, Integer>) request.getAttribute("splitReliquats");
 
+    Map<String, java.sql.Timestamp> splitDepartureVehicule = (Map<String, java.sql.Timestamp>) request.getAttribute("splitDepartureVehicule");
+    Map<String, java.sql.Timestamp> splitReturnVehicule = (Map<String, java.sql.Timestamp>) request.getAttribute("splitReturnVehicule");
+
     Map<String, Vehicule> vehiculeMap = new HashMap<>();
     if (vehicules != null) {
         for (Vehicule v : vehicules) vehiculeMap.put(v.getIdVehicule(), v);
     }
+
+    java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm");
 %>
 
 <div class="container-fluid">
@@ -107,6 +112,8 @@
                             <th>Véhicule</th>
                             <th>Capacité</th>
                             <th>Carburant</th>
+                            <th>Départ Aéroport</th>
+                            <th>Retour Aéroport</th>
                             <th>Portions</th>
                         </tr>
                     </thead>
@@ -116,11 +123,16 @@
                                 for (Vehicule v : vehicules) {
                                     TypeCarburant t = (typeById != null && v != null) ? typeById.get(v.getIdTypeCarburant()) : null;
                                     List<ReservationPortion> portions = (splitPortions != null) ? splitPortions.get(v.getIdVehicule()) : null;
+
+                                    java.sql.Timestamp dep = (splitDepartureVehicule != null) ? splitDepartureVehicule.get(v.getIdVehicule()) : null;
+                                    java.sql.Timestamp ret = (splitReturnVehicule != null) ? splitReturnVehicule.get(v.getIdVehicule()) : null;
                         %>
                         <tr>
                             <td><span class="fw-bold text-primary"><%= v.getIdVehicule() %></span></td>
                             <td><%= v.getNbrPlace() != null ? v.getNbrPlace() : "-" %></td>
                             <td><%= t != null ? t.getLibelle() : "-" %></td>
+                            <td><%= dep != null ? sdf.format(dep) : "-" %></td>
+                            <td><%= ret != null ? sdf.format(ret) : "-" %></td>
                             <td>
                                 <%
                                     if (portions != null && !portions.isEmpty()) {
