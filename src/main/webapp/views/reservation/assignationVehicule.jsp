@@ -14,6 +14,16 @@
     border-radius: 6px;
     margin-top: 20px;
 }
+.btn-assign,
+.btn-trajet {
+    border: none;
+    color: #6c757d;
+}
+.btn-assign:hover,
+.btn-trajet:hover {
+    border: none;
+    color: #6c757d;
+}
 </style>
 <%
     List<Reservation> reservations = (List<Reservation>) request.getAttribute("reservations");
@@ -25,6 +35,7 @@
     String selectedDate = (String) request.getAttribute("selectedDate");
     List<Hotel> hotels = (List<Hotel>) request.getAttribute("hotels");
     Map<String, Hotel> hotelMap = (Map<String, Hotel>) request.getAttribute("hotelMap");
+    List<Reservation> unassignedReservations = (List<Reservation>) request.getAttribute("unassignedReservations");
     Map<String, List<Reservation>> tourOrders = (Map<String, List<Reservation>>) request.getAttribute("tourOrders");
     Map<String, Map<String, java.sql.Timestamp>> detailedTimes = (Map<String, Map<String, java.sql.Timestamp>>) request.getAttribute("detailedTimes");
 
@@ -165,7 +176,7 @@
                                 </span>
                                 <div class="text-muted small">Durée: <%= durationTotal %> min</div>
 
-                                <button class="btn btn-sm btn-primary rounded-circle ms-2 btn-trajet"
+                                <button class="btn btn-sm ms-2 btn-trajet"
                                         title="Enregistrer le trajet"
                                         data-vehicule="<%= vId %>"
                                         data-date="<%= selectedDate %>"
@@ -299,6 +310,45 @@
         </div>
     </div>
 </div>
+
+<%
+    if (unassignedReservations != null && !unassignedReservations.isEmpty()) {
+%>
+<div class="card shadow-sm border-0 mt-4">
+    <div class="card-header bg-white py-3">
+        <h6 class="mb-0 fw-bold">Réservations non assignées</h6>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead class="bg-light text-muted">
+                    <tr>
+                        <th>Réservation</th>
+                        <th>Client</th>
+                        <th>Passagers</th>
+                        <th>Hôtel</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <%
+                        for (Reservation r : unassignedReservations) {
+                            Hotel h = hotelMap != null ? hotelMap.get(r.getIdHotel()) : null;
+                    %>
+                    <tr>
+                        <td><%= r.getIdReservation() %></td>
+                        <td><%= r.getIdClient() %></td>
+                        <td><%= r.getNbrPassager() %></td>
+                        <td><%= h != null ? h.getNomHotel() : r.getIdHotel() %></td>
+                        <td><%= r.getDateResa() != null ? df.format(r.getDateResa()) : "-" %></td>
+                    </tr>
+                    <% } %>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<% } %>
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {

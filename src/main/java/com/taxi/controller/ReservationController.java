@@ -648,6 +648,20 @@ public class ReservationController {
                 distanceMatrix, currentParam);
         Map<String, Vehicule> assignments = view.getAssignments();
         List<Reservation> viewReservations = view.getReservations();
+        List<Reservation> unassigned = new ArrayList<>();
+        java.util.Set<String> assignedBaseIds = new java.util.HashSet<>();
+        for (Reservation r : viewReservations) {
+            String id = r.getIdReservation();
+            if (id != null) {
+                int idx = id.indexOf("#");
+                assignedBaseIds.add(idx >= 0 ? id.substring(0, idx) : id);
+            }
+        }
+        for (Reservation r : filtered) {
+            if (r.getIdReservation() != null && !assignedBaseIds.contains(r.getIdReservation())) {
+                unassigned.add(r);
+            }
+        }
             Map<String, Timestamp> departureTimes = new HashMap<>();
             Map<String, Timestamp> arrivalTimes = new HashMap<>();
 
@@ -663,6 +677,7 @@ public class ReservationController {
             mv.addObject("selectedDate", date);
             mv.addObject("hotels", hotels);
             mv.addObject("hotelMap", hotelMap);
+            mv.addObject("unassignedReservations", unassigned);
             
             // Calculer l'ordre des tournées et les heures détaillées pour l'affichage
         Map<String, List<Reservation>> tourOrders = calculerOrdreTournées(viewReservations, assignments, hotelMap, distanceMatrix, departureTimes, arrivalTimes);
