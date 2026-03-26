@@ -11,6 +11,8 @@
     String formAction = isEdit ? "/vehicule/update" : "/vehicule/save";
     String pageHeader = isEdit ? "Modifier le véhicule" : "Nouveau véhicule";
     String submitText = isEdit ? "Enregistrer" : "Créer";
+    String vehiculeHeureDebut = (String) request.getAttribute("vehiculeHeureDebut");
+    String vehiculeHeureFin = (String) request.getAttribute("vehiculeHeureFin");
 %>
 
 <div class="container-fluid">
@@ -66,6 +68,16 @@
                                         } 
                                     %>
                                 </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="heureDebutInput" class="form-label">Disponible chaque jour à partir de</label>
+                                <input type="time" id="heureDebutInput" name="heureDebutInput" class="form-control"
+                                       value="<%= vehiculeHeureDebut != null ? vehiculeHeureDebut : "00:00" %>">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="heureFinInput" class="form-label">Disponible chaque jour jusqu'à</label>
+                                <input type="time" id="heureFinInput" name="heureFinInput" class="form-control"
+                                       value="<%= vehiculeHeureFin != null ? vehiculeHeureFin : "23:59" %>">
                             </div>
                         </div>
 

@@ -7,6 +7,7 @@
 <%
     List<Vehicule> disponibles = (List<Vehicule>) request.getAttribute("disponibles");
     List<TypeCarburant> types = (List<TypeCarburant>) request.getAttribute("types");
+    Map<String, String> disponibilites = (Map<String, String>) request.getAttribute("disponibilites");
     String selectedDate = (String) request.getAttribute("selectedDate");
     
     Map<String, TypeCarburant> typeById = new HashMap<>();
@@ -62,6 +63,7 @@
                             <th>Référence</th>
                             <th>Capacité</th>
                             <th>Carburant</th>
+                            <th>Plage dispo quotidienne</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -69,6 +71,7 @@
                             if (disponibles != null && !disponibles.isEmpty()) {
                                 for (Vehicule v : disponibles) {
                                     TypeCarburant t = typeById.get(v.getIdTypeCarburant());
+                                    String plage = disponibilites != null ? disponibilites.get(v.getIdVehicule()) : null;
                         %>
                         <tr>
                             <td class="ps-4">
@@ -81,13 +84,14 @@
                                     <i class="fas fa-gas-pump me-1"></i><%= t != null ? t.getLibelle() : "N/A" %>
                                 </span>
                             </td>
+                            <td><%= plage != null ? plage : "00:00 - 23:59" %></td>
                         </tr>
                         <% 
                                 }
                             } else {
                         %>
                         <tr>
-                            <td colspan="4" class="text-center py-5">
+                            <td colspan="5" class="text-center py-5">
                                 <div class="text-muted">
                                     <i class="fas fa-car-side fa-3x mb-3 opacity-25"></i>
                                     <p class="mb-0">Aucun véhicule disponible pour cette date</p>

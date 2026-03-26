@@ -33,6 +33,10 @@ INSERT INTO vehicule (id_vehicule, reference, nbr_place, id_type_carburant) VALU
 ('VH003', 'V003', 5, 'TC0001'),
 ('VH004', 'V004', 12, 'TC0002');  -- Essence
 
+INSERT INTO disponibilite_vehicule (id_vehicule, heure_debut, heure_fin)
+SELECT id_vehicule, TIME '00:00:00', TIME '23:59:59'
+FROM vehicule;
+
 -- RESERVATION
 -- dateheurearrivee → date_resa, idhotel mappé
 INSERT INTO reservation (id_reservation, id_client, nbr_passager, id_hotel, date_resa) VALUES

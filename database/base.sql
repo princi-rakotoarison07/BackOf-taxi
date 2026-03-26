@@ -3,6 +3,9 @@
 -- Suppression des tables si elles existent
 DROP TABLE IF EXISTS reservation CASCADE;
 DROP TABLE IF EXISTS assignation_reservation CASCADE;
+DROP TABLE IF EXISTS trajet_execute CASCADE;
+DROP TABLE IF EXISTS vehicule_nombre_trajets CASCADE;
+DROP TABLE IF EXISTS disponibilite_vehicule CASCADE;
 DROP TABLE IF EXISTS hotel CASCADE;
 DROP TABLE IF EXISTS lieuhotel CASCADE;
 DROP TABLE IF EXISTS parametre CASCADE;
@@ -96,6 +99,19 @@ CREATE TABLE vehicule (
         ON DELETE RESTRICT
 );
 
+CREATE TABLE disponibilite_vehicule (
+    id_vehicule VARCHAR(50) PRIMARY KEY,
+    heure_debut TIME NOT NULL DEFAULT TIME '00:00:00',
+    heure_fin TIME NOT NULL DEFAULT TIME '23:59:59',
+    date_maj TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_disponibilite_vehicule
+        FOREIGN KEY (id_vehicule)
+        REFERENCES vehicule(id_vehicule)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE
+);
+
 CREATE TABLE assignation_reservation (
     id_assignation SERIAL PRIMARY KEY,
     id_reservation VARCHAR(50) NOT NULL,
@@ -117,6 +133,38 @@ CREATE TABLE assignation_reservation (
         REFERENCES vehicule(id_vehicule)
         ON UPDATE CASCADE
         ON DELETE SET NULL
+);
+
+CREATE TABLE trajet_execute (
+    id_trajet SERIAL PRIMARY KEY,
+    date_jour DATE NOT NULL,
+    id_vehicule VARCHAR(50) NOT NULL,
+    heure_depart TIMESTAMP NOT NULL,
+    heure_retour TIMESTAMP NOT NULL,
+    nb_reservations INTEGER NOT NULL DEFAULT 0 CHECK (nb_reservations >= 0),
+    total_passagers INTEGER NOT NULL DEFAULT 0 CHECK (total_passagers >= 0),
+    reservations_detail TEXT,
+    date_calcul TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_trajet_vehicule
+        FOREIGN KEY (id_vehicule)
+        REFERENCES vehicule(id_vehicule)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
+);
+
+CREATE TABLE vehicule_nombre_trajets (
+    date_jour DATE NOT NULL,
+    id_vehicule VARCHAR(50) NOT NULL,
+    nombre_trajets INTEGER NOT NULL DEFAULT 0 CHECK (nombre_trajets >= 0),
+    date_calcul TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (date_jour, id_vehicule),
+
+    CONSTRAINT fk_nombre_trajets_vehicule
+        FOREIGN KEY (id_vehicule)
+        REFERENCES vehicule(id_vehicule)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE
 );
 
 -- Insertion des types de carburant par défaut

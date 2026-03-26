@@ -10,6 +10,7 @@ BEGIN;
 
 -- Nettoyage (ordre respectant les FK)
 DELETE FROM reservation;
+DELETE FROM disponibilite_vehicule;
 DELETE FROM vehicule;
 DELETE FROM type_carburant;
 DELETE FROM distance;
@@ -84,6 +85,10 @@ INSERT INTO vehicule (id_vehicule, reference, nbr_place, id_type_carburant) VALU
 ('VH104', 'DIESEL-6',  6, 'TC0001'),
 ('VH105', 'ELEC-8',    8, 'TC0003'),
 ('VH106', 'ESS-4',     4, 'TC0002');
+
+INSERT INTO disponibilite_vehicule (id_vehicule, heure_debut, heure_fin)
+SELECT id_vehicule, TIME '00:00:00', TIME '23:59:59'
+FROM vehicule;
 
 -- ================================================
 -- JOURNEE DE TEST: 2026-04-20
