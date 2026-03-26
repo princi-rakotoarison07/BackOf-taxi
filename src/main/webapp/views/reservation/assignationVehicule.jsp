@@ -130,12 +130,16 @@
 
                                     String depRaw = "";
                                     String arrRaw = "";
+                                    String durationTotal = "-";
                                     if (assignedResas != null && !assignedResas.isEmpty() && departureTimes != null && arrivalTimes != null) {
                                         String firstId = assignedResas.get(0).getIdReservation();
                                         java.sql.Timestamp depTs = departureTimes.get(firstId);
                                         java.sql.Timestamp arrTs = arrivalTimes.get(firstId);
                                         depRaw = depTs != null ? new java.sql.Timestamp(depTs.getTime()).toString().substring(0, 19) : "";
                                         arrRaw = arrTs != null ? new java.sql.Timestamp(arrTs.getTime()).toString().substring(0, 19) : "";
+                                        if (depTs != null && arrTs != null) {
+                                            durationTotal = String.valueOf((arrTs.getTime() - depTs.getTime()) / 60000L);
+                                        }
                                     }
                         %>
                         <tr class="bg-white">
@@ -159,6 +163,7 @@
                                 <span class="badge <%= availableSeats > 0 ? "bg-success-soft text-success" : "bg-danger-soft text-danger" %>">
                                     <%= availableSeats %> places
                                 </span>
+                                <div class="text-muted small">Durée: <%= durationTotal %> min</div>
 
                                 <button class="btn btn-sm btn-primary rounded-circle ms-2 btn-trajet"
                                         title="Enregistrer le trajet"
@@ -231,7 +236,7 @@
                                                 <small class="text-muted">Arrivée</small>
                                                 <div class="fw-bold text-success"><%= legArr %></div>
                                             </div>
-                                            <div class="px-2 border-start text-end" style="width: 140px;">
+                                            <div class="px-2 border-start text-end" style="width: 160px;">
                                                 <span class="badge bg-primary rounded-pill me-2"><%= currentResa.getNbrPassager() %> pers</span>
                                                 <button class="btn btn-sm btn-link text-muted p-0 ms-2 btn-assign" 
                                                         title="Enregistrer l'assignation"
