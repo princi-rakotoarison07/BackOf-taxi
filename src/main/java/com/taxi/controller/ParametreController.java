@@ -1,6 +1,5 @@
 package com.taxi.controller;
 
-
 import com.taxi.model.Parametre;
 import com.taxi.util.DBConnection;
 import framework.annotation.Controller;
@@ -17,21 +16,21 @@ import java.util.List;
 @RestController
 public class ParametreController {
 
-    @GetMapping("/api/parametres")
+    @GetMapping("/BackOf-taxi/api/parametres")
     public List<Parametre> listParametres() throws Exception {
         try (Connection conn = DBConnection.getConnection()) {
             return Parametre.getAll(Parametre.class, conn);
         }
     }
 
-    @GetMapping("/parametre/form")
+    @GetMapping("/BackOf-taxi/parametre/form")
     public ModelAndView showForm() {
         ModelAndView mv = new ModelAndView("/views/parametre/form.jsp");
         mv.addObject("pageTitle", "Paramètres");
         return mv;
     }
 
-    @PostMapping("/parametre/insert")
+    @PostMapping("/BackOf-taxi/parametre/insert")
     public ModelAndView insert(@ModelAttribute Parametre parametre) {
         ModelAndView mv = new ModelAndView("/views/parametre/form.jsp");
         mv.addObject("pageTitle", "Paramètres");
@@ -51,8 +50,6 @@ public class ParametreController {
 
             if (parametre.getTempsAttente() == null || parametre.getTempsAttente() <= 0) {
                 mv.addObject("error", "Le temps d'attente doit être supérieur à 0");
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
                 return mv;
             }
 
@@ -70,7 +67,7 @@ public class ParametreController {
         return mv;
     }
 
-    @GetMapping("/parametre/delete")
+    @GetMapping("/BackOf-taxi/parametre/delete")
     public ModelAndView delete(@Param("id") String id) {
         ModelAndView mv = new ModelAndView("/views/parametre/list.jsp");
         try (Connection conn = DBConnection.getConnection()) {
@@ -90,7 +87,7 @@ public class ParametreController {
         return mv;
     }
 
-    @GetMapping("/parametre/list")
+    @GetMapping("/BackOf-taxi/parametre/list")
     public ModelAndView list() {
         ModelAndView mv = new ModelAndView("/views/parametre/list.jsp");
         mv.addObject("pageTitle", "Liste des Paramètres");
@@ -106,41 +103,3 @@ public class ParametreController {
         return mv;
     }
 }
-=======
-=======
->>>>>>> Stashed changes
-             
-
-    
-
-    ddObject("
-
-    mv.addObject("parametre
-
-    e.printStackTrace();
-    mv.addObject("error", "Ereur lors de l'enr
-
-    
-
-    
-
-    ic ModelAn 
-
-        
-
-        List<Parametre> parametres = Parametre.getAll(Parametre.clas    mv.addObject("parametes", parametres);
-
-       e
-    .printStackTrace();
-    
-        mv.addObject("error", "Erreur lors du chargement des paramètres : " +
-        
-    
-
-    
-
-
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes

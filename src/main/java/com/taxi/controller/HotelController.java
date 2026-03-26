@@ -12,10 +12,12 @@ import java.util.List;
 @RestController
 public class HotelController {
 
-    @GetMapping("/api/hotels")
+    @GetMapping("/BackOf-taxi/api/hotels")
     public List<Hotel> listHotels() throws Exception {
         try (Connection conn = DBConnection.getConnection()) {
-            return Hotel.getAll(Hotel.class, conn);
+            List<Hotel> hotels = Hotel.getAll(Hotel.class, conn);
+            System.out.println("[API] Récupération de " + (hotels != null ? hotels.size() : 0) + " hôtels");
+            return hotels;
         }
     }
 }

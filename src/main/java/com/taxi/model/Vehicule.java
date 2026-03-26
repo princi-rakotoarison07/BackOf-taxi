@@ -23,6 +23,9 @@ public class Vehicule extends Model {
     @Column(name = "id_type_carburant")
     private String idTypeCarburant;
 
+    @Column(name = "heure_disponible")
+    private java.sql.Timestamp heureDisponible;
+
     public Vehicule() {
     }
 
@@ -58,6 +61,14 @@ public class Vehicule extends Model {
         this.idTypeCarburant = idTypeCarburant;
     }
 
+    public java.sql.Timestamp getHeureDisponible() {
+        return heureDisponible;
+    }
+
+    public void setHeureDisponible(java.sql.Timestamp heureDisponible) {
+        this.heureDisponible = heureDisponible;
+    }
+
     @Override
     public void insert(Connection conn) throws Exception {
         if (this.idVehicule == null || this.idVehicule.isEmpty()) {
@@ -76,5 +87,18 @@ public class Vehicule extends Model {
             }
         }
         throw new Exception("Impossible de générer l'ID Vehicule");
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Vehicule vehicule = (Vehicule) o;
+        return idVehicule != null ? idVehicule.equals(vehicule.idVehicule) : vehicule.idVehicule == null;
+    }
+
+    @Override
+    public int hashCode() {
+        return idVehicule != null ? idVehicule.hashCode() : 0;
     }
 }

@@ -32,7 +32,7 @@
                     <% } %>
 
                     <div class="d-flex flex-column gap-2 mt-4">
-                        <a href="${pageContext.request.contextPath}/reservation/form" class="btn btn-primary py-3">
+                        <a href="${pageContext.request.contextPath}/BackOf-taxi/reservation/form" class="btn btn-primary py-3">
                             <i class="fas fa-home me-2"></i>Retour à l'accueil
                         </a>
                         <a href="javascript:history.back()" class="btn btn-link text-secondary text-decoration-none">
@@ -61,7 +61,7 @@
         countdownElement.textContent = seconds;
         if (seconds <= 0) {
             clearInterval(interval);
-            window.location.href = "${pageContext.request.contextPath}/reservation/form";
+            window.location.href = "${pageContext.request.contextPath}/BackOf-taxi/reservation/form";
         }
     }, 1000);
 </script>
