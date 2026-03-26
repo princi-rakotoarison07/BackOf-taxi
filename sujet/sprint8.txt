@@ -1,3 +1,32 @@
+QUAND un véhicule revient à l'aéroport (heure_retour) :
+
+  reservations_en_attente = chercher clients non encore assignés
+                            avec heure_résa <= heure_retour
+
+  SI reservations_en_attente EST VIDE :
+    → Partir immédiatement (rien à attendre)
+    → heure_départ = heure_retour
+    → véhicule idle (aucune course lancée)
+
+  SINON (réservations trouvées) :
+
+    total_passagers = somme nb_pers des réservations en attente
+
+    A. Véhicule PLEIN (total_passagers >= places_disponibles) :
+       → Partir immédiatement
+       → heure_départ = heure_retour
+
+    B. Véhicule NON PLEIN (total_passagers < places_disponibles) :
+       → Attendre un nouveau vol pendant temps_attente
+       → heure_limite = heure_retour + temps_attente
+
+       SI nouvelle réservation détectée avant heure_limite :
+         → Embarquer ce(s) client(s) aussi
+         → heure_départ = heure_résa_nouveau_vol
+
+       SI aucune nouvelle réservation avant heure_limite :
+         → Partir avec les passagers actuels
+         → heure_départ = heure_retour 
 package com.taxi.controller;
 
 import com.taxi.model.Reservation;
@@ -935,29 +964,27 @@ public class ReservationController {
                 return safe(v1.getIdVehicule()).compareTo(safe(v2.getIdVehicule()));
             });
             Map<Vehicule, List<Reservation>> assignedToVehicule = new HashMap<>();
-            for (int i = 0; i < waveVehicles.size(); i++) {
-                Vehicule v = waveVehicles.get(i);
+            for (Vehicule v : waveVehicles) {
                 int cap = v.getNbrPlace() != null ? v.getNbrPlace() : 0;
                 if (cap <= 0)
                     continue;
-                int maxRemaining = 0;
+                if (pending.isEmpty())
+                    continue;
+                int totalPending = 0;
                 for (PendingReservation pr : pending) {
-                    if (pr.remaining > maxRemaining) {
-                        maxRemaining = pr.remaining;
-                    }
+                    totalPending += pr.remaining;
                 }
-                if (cap >= 8 && maxRemaining <= 5) {
-                    boolean hasSmallLater = false;
-                    for (int j = i + 1; j < waveVehicles.size(); j++) {
-                        Vehicule v2 = waveVehicles.get(j);
-                        int cap2 = v2.getNbrPlace() != null ? v2.getNbrPlace() : 0;
-                        if (cap2 > 0 && cap2 < 8) {
-                            hasSmallLater = true;
-                            break;
+                Timestamp departTime = currentTime;
+                Integer waitMin = param != null ? param.getTempsAttente() : null;
+                long waitMs = waitMin != null ? waitMin.longValue() * 60000L : 0L;
+                if (totalPending < cap && waitMs > 0 && !future.isEmpty()) {
+                    Timestamp limit = new Timestamp(currentTime.getTime() + waitMs);
+                    Timestamp nextResa = future.get(0).reservation.getDateResa();
+                    if (nextResa != null && !nextResa.after(limit)) {
+                        departTime = nextResa;
+                        while (!future.isEmpty() && !future.get(0).reservation.getDateResa().after(departTime)) {
+                            pending.add(future.remove(0));
                         }
-                    }
-                    if (hasSmallLater) {
-                        continue;
                     }
                 }
                 boolean assignedAny = false;
@@ -976,7 +1003,7 @@ public class ReservationController {
                     clone.setIdClient(chosen.reservation.getIdClient());
                     clone.setNbrPassager(pris);
                     clone.setIdHotel(chosen.reservation.getIdHotel());
-                    clone.setDateResa(currentTime);
+                    clone.setDateResa(departTime);
                     outReservations.add(clone);
                     assignments.put(clone.getIdReservation(), v);
                     assignedToVehicule.computeIfAbsent(v, k -> new ArrayList<>()).add(clone);
@@ -997,7 +1024,7 @@ public class ReservationController {
                 Vehicule v = entry.getKey();
                 List<Reservation> tour = entry.getValue();
                 long durationMs = calculerDureeTournee(tour, hotelMap, distanceMatrix, param);
-                Timestamp dep = currentTime;
+                Timestamp dep = tour.get(0).getDateResa();
                 Timestamp free = nextFreeTime.getOrDefault(v, new Timestamp(0));
                 if (free != null && free.after(dep)) {
                     dep = free;
@@ -1027,6 +1054,7 @@ public class ReservationController {
         }
         return new AssignationView(outReservations, assignments);
     }
+
 
     private PendingReservation selectPendingReservation(List<PendingReservation> pending, int cap,
             boolean assignedAny, Vehicule vehicule, String hotelPref) {
