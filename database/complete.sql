@@ -56,7 +56,7 @@ CREATE TABLE vehicule (
     reference VARCHAR(50) NOT NULL,
     nbr_place INTEGER NOT NULL CHECK (nbr_place > 0),
     id_type_carburant VARCHAR(50) NOT NULL,
-    heure_disponible TIMESTAMP NULL,
+    heure_disponible TIME NULL,
     CONSTRAINT fk_vehicule_type_carburant FOREIGN KEY (id_type_carburant) REFERENCES type_carburant(id_type_carburant) ON UPDATE CASCADE ON DELETE RESTRICT
 );
 CREATE TABLE reservation (

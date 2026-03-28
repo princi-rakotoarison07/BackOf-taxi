@@ -24,7 +24,7 @@ public class Vehicule extends Model {
     private String idTypeCarburant;
 
     @Column(name = "heure_disponible")
-    private java.sql.Timestamp heureDisponible;
+    private java.sql.Time heureDisponible;
 
     public Vehicule() {
     }
@@ -61,11 +61,11 @@ public class Vehicule extends Model {
         this.idTypeCarburant = idTypeCarburant;
     }
 
-    public java.sql.Timestamp getHeureDisponible() {
+    public java.sql.Time getHeureDisponible() {
         return heureDisponible;
     }
 
-    public void setHeureDisponible(java.sql.Timestamp heureDisponible) {
+    public void setHeureDisponible(java.sql.Time heureDisponible) {
         this.heureDisponible = heureDisponible;
     }
 
