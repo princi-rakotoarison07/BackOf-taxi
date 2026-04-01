@@ -1096,15 +1096,50 @@ public class ReservationController {
                             vs.departureTime = null;
                             vs.trips++;
                         } else {
-                            for (PendingReservation pr : pending) {
-                                vs.loadedPortions.add(new ReservationPortion(pr.reservation, pr.remaining));
-                                vs.remainingCap -= pr.remaining;
+                            // Vehicule not full, initiate waiting
+                            while (vs.remainingCap > 0 && !pending.isEmpty()) {
+                                PendingReservation best = null;
+                                boolean hasPriority = false;
+                                for (PendingReservation p : pending) {
+                                    if (p.remainder) {
+                                        hasPriority = true;
+                                        break;
+                                    }
+                                }
+                                if (hasPriority) {
+                                    for (PendingReservation p : pending) {
+                                        if (p.remainder) {
+                                            best = p;
+                                            break;
+                                        }
+                                    }
+                                } else {
+                                    int minDiff = Integer.MAX_VALUE;
+                                    int maxPlaces = -1;
+                                    for (PendingReservation pr : pending) {
+                                        int diff = Math.abs(pr.remaining - vs.remainingCap);
+                                        if (diff < minDiff || (diff == minDiff && pr.remaining > maxPlaces)) {
+                                            minDiff = diff;
+                                            maxPlaces = pr.remaining;
+                                            best = pr;
+                                        }
+                                    }
+                                }
+                                if (best != null) {
+                                    int pris = Math.min(vs.remainingCap, best.remaining);
+                                    vs.loadedPortions.add(new ReservationPortion(best.reservation, pris));
+                                    vs.remainingCap -= pris;
+                                    best.remaining -= pris;
+                                    if (best.remaining <= 0) pending.remove(best);
+                                    else best.remainder = true;
+                                } else {
+                                    break;
+                                }
                             }
-                            pending.clear();
                             
                             vs.isWaiting = true;
-                            vs.availableTime = new Timestamp(currentTime.getTime() + tempsAttente * 60000L);
-                            vs.departureTime = vs.availableTime;
+                            vs.departureTime = new Timestamp(currentTime.getTime() + tempsAttente * 60000L);
+                            vs.availableTime = vs.departureTime;
                         }
                     }
                 }
