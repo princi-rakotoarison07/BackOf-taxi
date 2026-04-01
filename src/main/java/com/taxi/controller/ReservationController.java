@@ -547,6 +547,25 @@ public class ReservationController {
         return best;
     }
 
+    private String resolveDatePrefix(String selectedDate, List<Reservation> reservations) {
+        if (selectedDate != null && !selectedDate.isEmpty()) {
+            return selectedDate;
+        }
+        if (reservations != null && !reservations.isEmpty()) {
+            Timestamp min = null;
+            for (Reservation r : reservations) {
+                if (r == null || r.getDateResa() == null) continue;
+                if (min == null || r.getDateResa().before(min)) {
+                    min = r.getDateResa();
+                }
+            }
+            if (min != null) {
+                return new java.sql.Date(min.getTime()).toString();
+            }
+        }
+        return new java.sql.Date(System.currentTimeMillis()).toString();
+    }
+
     @PostMapping("/BackOf-taxi/reservation/save-assignation")
     public Map<String, Object> saveAssignation(@ModelAttribute Assignation assignation) {
         Map<String, Object> result = new HashMap<>();
@@ -871,6 +890,73 @@ public class ReservationController {
         int trips = 0;
     }
 
+    private PendingReservation choisirMeilleureReservation(List<PendingReservation> pending, int remainingCap,
+            Timestamp maxAcceptedDate) {
+        if (pending == null || pending.isEmpty() || remainingCap <= 0) {
+            return null;
+        }
+
+        PendingReservation best = null;
+        boolean hasPriority = false;
+        for (PendingReservation p : pending) {
+            if (p == null) continue;
+            if (maxAcceptedDate != null && (p.reservation == null || p.reservation.getDateResa() == null
+                    || p.reservation.getDateResa().after(maxAcceptedDate))) {
+                continue;
+            }
+            if (p.remainder) {
+                hasPriority = true;
+                break;
+            }
+        }
+
+        int bestEmptySeats = Integer.MAX_VALUE;
+        int bestLeftover = Integer.MAX_VALUE;
+        Timestamp bestDate = null;
+
+        for (PendingReservation pr : pending) {
+            if (pr == null || pr.reservation == null) continue;
+            if (pr.remaining <= 0) continue;
+            if (maxAcceptedDate != null && (pr.reservation.getDateResa() == null
+                    || pr.reservation.getDateResa().after(maxAcceptedDate))) {
+                continue;
+            }
+
+            if (hasPriority && !pr.remainder) {
+                continue;
+            }
+
+            int taken = Math.min(remainingCap, pr.remaining);
+            int emptySeats = remainingCap - taken;
+            int leftover = pr.remaining - taken;
+            Timestamp d = pr.reservation.getDateResa();
+
+            boolean better = false;
+            if (emptySeats < bestEmptySeats) {
+                better = true;
+            } else if (emptySeats == bestEmptySeats) {
+                if (leftover < bestLeftover) {
+                    better = true;
+                } else if (leftover == bestLeftover) {
+                    if (bestDate == null) {
+                        better = true;
+                    } else if (d != null && d.before(bestDate)) {
+                        better = true;
+                    }
+                }
+            }
+
+            if (better) {
+                best = pr;
+                bestEmptySeats = emptySeats;
+                bestLeftover = leftover;
+                bestDate = d;
+            }
+        }
+
+        return best;
+    }
+
     private AssignationView assignerVehiculesGenererPortions(List<Reservation> reservations, List<Vehicule> vehicules,
             Map<String, TypeCarburant> typeById, Map<String, Hotel> hotelMap,
             Map<String, Map<String, Distance>> distanceMatrix, Parametre param, String selectedDate) {
@@ -885,8 +971,8 @@ public class ReservationController {
         future.sort((a, b) -> a.reservation.getDateResa().compareTo(b.reservation.getDateResa()));
         
         List<PendingReservation> pending = new ArrayList<>();
-        
-        String datePrefix = (selectedDate != null && !selectedDate.isEmpty()) ? selectedDate : new java.sql.Date(System.currentTimeMillis()).toString();
+
+        String datePrefix = resolveDatePrefix(selectedDate, reservations);
         
         List<VehicleState> states = new ArrayList<>();
         for (Vehicule v : vehicules) {
@@ -960,33 +1046,7 @@ public class ReservationController {
             for (VehicleState vs : readyVehicles) {
                 if (vs.isWaiting) {
                     while (vs.remainingCap > 0 && !pending.isEmpty()) {
-                        PendingReservation best = null;
-                        boolean hasPriority = false;
-                        for (PendingReservation p : pending) {
-                            if (p.remainder) {
-                                hasPriority = true;
-                                break;
-                            }
-                        }
-                        if (hasPriority) {
-                            for (PendingReservation p : pending) {
-                                if (p.remainder) {
-                                    best = p;
-                                    break;
-                                }
-                            }
-                        } else {
-                            int minDiff = Integer.MAX_VALUE;
-                            int maxPlaces = -1;
-                            for (PendingReservation pr : pending) {
-                                int diff = Math.abs(pr.remaining - vs.remainingCap);
-                                if (diff < minDiff || (diff == minDiff && pr.remaining > maxPlaces)) {
-                                    minDiff = diff;
-                                    maxPlaces = pr.remaining;
-                                    best = pr;
-                                }
-                            }
-                        }
+                        PendingReservation best = choisirMeilleureReservation(pending, vs.remainingCap, vs.departureTime);
                         if (best != null) {
                             int pris = Math.min(vs.remainingCap, best.remaining);
                             vs.loadedPortions.add(new ReservationPortion(best.reservation, pris));
@@ -1035,33 +1095,7 @@ public class ReservationController {
                         
                         if (totalPending >= cap) {
                             while (vs.remainingCap > 0 && !pending.isEmpty()) {
-                                PendingReservation best = null;
-                                boolean hasPriority = false;
-                                for (PendingReservation p : pending) {
-                                    if (p.remainder) {
-                                        hasPriority = true;
-                                        break;
-                                    }
-                                }
-                                if (hasPriority) {
-                                    for (PendingReservation p : pending) {
-                                        if (p.remainder) {
-                                            best = p;
-                                            break;
-                                        }
-                                    }
-                                } else {
-                                    int minDiff = Integer.MAX_VALUE;
-                                    int maxPlaces = -1;
-                                    for (PendingReservation pr : pending) {
-                                        int diff = Math.abs(pr.remaining - vs.remainingCap);
-                                        if (diff < minDiff || (diff == minDiff && pr.remaining > maxPlaces)) {
-                                            minDiff = diff;
-                                            maxPlaces = pr.remaining;
-                                            best = pr;
-                                        }
-                                    }
-                                }
+                                PendingReservation best = choisirMeilleureReservation(pending, vs.remainingCap, null);
                                 if (best != null) {
                                     int pris = Math.min(vs.remainingCap, best.remaining);
                                     vs.loadedPortions.add(new ReservationPortion(best.reservation, pris));
@@ -1098,33 +1132,7 @@ public class ReservationController {
                         } else {
                             // Vehicule not full, initiate waiting
                             while (vs.remainingCap > 0 && !pending.isEmpty()) {
-                                PendingReservation best = null;
-                                boolean hasPriority = false;
-                                for (PendingReservation p : pending) {
-                                    if (p.remainder) {
-                                        hasPriority = true;
-                                        break;
-                                    }
-                                }
-                                if (hasPriority) {
-                                    for (PendingReservation p : pending) {
-                                        if (p.remainder) {
-                                            best = p;
-                                            break;
-                                        }
-                                    }
-                                } else {
-                                    int minDiff = Integer.MAX_VALUE;
-                                    int maxPlaces = -1;
-                                    for (PendingReservation pr : pending) {
-                                        int diff = Math.abs(pr.remaining - vs.remainingCap);
-                                        if (diff < minDiff || (diff == minDiff && pr.remaining > maxPlaces)) {
-                                            minDiff = diff;
-                                            maxPlaces = pr.remaining;
-                                            best = pr;
-                                        }
-                                    }
-                                }
+                                PendingReservation best = choisirMeilleureReservation(pending, vs.remainingCap, null);
                                 if (best != null) {
                                     int pris = Math.min(vs.remainingCap, best.remaining);
                                     vs.loadedPortions.add(new ReservationPortion(best.reservation, pris));
