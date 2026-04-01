@@ -22,3 +22,6 @@ alors le date depart 10H20, et on applique le règle logique dans le RES1,RES2,R
       et lorsqu'un véhicule attend car il n'est pas plein, on choisit parmi les réservations disponibles 
       celle dont le nombre de places correspond le mieux à la capacité restante du véhicule,
   et les passagers éventuellement non assignés deviennent prioritaires pour le prochain véhicule disponible.
+
+Rehefa feno tode lasa,
+Izay lera hakana reservation farany no engana 

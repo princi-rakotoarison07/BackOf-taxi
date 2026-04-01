@@ -29,30 +29,12 @@ INSERT INTO distance (id_distance, lieu_from, lieu_to, kilometre) VALUES
 -- Configuration du véhicule VH_0 (5 places) qui va prendre 5 pers de RES_S8_0 (12 pers)
 -- ce qui laissera 7 personnes non assignées pour le VH_1
 INSERT INTO vehicule (id_vehicule, reference, nbr_place, id_type_carburant, heure_disponible) VALUES
-('VH_S8_0', 'vehicule0', 5,  'TC0001', '09:40:00'),
-('VH_S8_1', 'vehicule1', 12,  'TC0001', '09:50:00');
-
--- Création de la réservation initiale de 12 personnes à 09:40
--- Le VH_S8_0 va prendre 5 personnes, il restera 7 personnes "non assignées"
-INSERT INTO reservation (id_reservation, id_client, nbr_passager, id_hotel, date_resa) VALUES
-('RES_S8_0', 'Client_Reliquat', 12, 'HOT_S8_1', '2026-03-20 09:40:00');
+('VH_S8_0', 'vehicule0', 15,  'TC0001', '09:40:00');
 
 -- Les autres réservations
 INSERT INTO reservation (id_reservation, id_client, nbr_passager, id_hotel, date_resa) VALUES
 ('RES_S8_1', 'Client_RES1', 10, 'HOT_S8_1', '2026-03-20 10:00:00'),
-('RES_S8_2', 'Client_RES2', 7,  'HOT_S8_1', '2026-03-20 10:10:00'),
-('RES_S8_3', 'Client_RES3', 3,  'HOT_S8_1', '2026-03-20 10:15:00'),
-('RES_S8_4', 'Client_RES4', 5,  'HOT_S8_1', '2026-03-20 10:30:00');
-
--- Explication de ce qui doit se passer :
--- 0. VH_S8_0 (5 places) part à 09:40 avec 5 personnes de RES_S8_0. Il reste 7 personnes de RES_S8_0 non assignées.
--- 1. VH_S8_1 (12 places) arrive à 09:50.
--- 2. Il trouve le reliquat RES_S8_0 (7 places) en attente.
--- 3. Il charge les 7 places. Il lui reste 5 places libres.
--- 4. Comme il n'est pas plein, il attend 30 minutes (jusqu'à 10:20).
--- 5. Pendant son attente (09:50 - 10:20), RES_S8_1 (10p), RES_S8_2 (7p) et RES_S8_3 (3p) arrivent.
--- 6. A 10:20, il doit choisir comment combler ses 5 places.
--- 7. RES_S8_2 (7 places) est choisie car 5 places prises sur 7 est le meilleur match parmi (10, 7, 3).
--- 8. Il prend 5 personnes de RES_S8_2.
--- 9. Il reste 2 personnes de RES_S8_2 non assignées, qui deviendront prioritaires pour le prochain véhicule.
--- 10. RES_S8_4 arrive à 10:30, donc après le départ du véhicule à 10:20, il ne sera pas pris en compte pour ce départ.
+('RES_S8_2', 'Client_RES2', 10, 'HOT_S8_1', '2026-03-20 10:05:00')
+;
+INSERT INTO reservation (id_reservation, id_client, nbr_passager, id_hotel, date_resa) VALUES
+('RES_S8_3', 'Client_RES3', 10, 'HOT_S8_1', '2026-03-20 11:30:00');

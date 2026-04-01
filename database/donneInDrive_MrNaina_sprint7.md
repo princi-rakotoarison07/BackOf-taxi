@@ -51,4 +51,4 @@
 - Les **grands groupes sont divisés** : Client2 (20 pers) est réparti sur vehicule3 (12) + vehicule4 (8).
 - **vehicule5** (disponible seulement à 13h00) prend en charge Client6 dont la réservation est à 13h30.
 - La durée standard d'une tournée est de **216 minutes (3h36)**, sauf la première course de vehicule3 (84 min).
-- La formule `=D62+TEMPS(0;F68;0)` calcule les heures de retour dynamiquement.
+- La formule `=D62+TEMPS(0;F68;0)` calcule les heures de retour dynamiquement..
