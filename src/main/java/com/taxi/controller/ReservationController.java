@@ -176,6 +176,9 @@ public class ReservationController {
             calculerHoraires(filtered, currentParam, hotelMap, distanceMatrix, assignments, plannedDepartureTimes, departureTimes,
                     arrivalTimes);
 
+            // Garantit des horaires coherents avec les chunks reels (splits multi-vagues inclus).
+            synchroniserHorairesDepuisChunks(assignmentChunksByReservation, plannedDepartureTimes, departureTimes, arrivalTimes);
+
                 sauvegarderAssignations(conn, filtered, assignmentChunksByReservation, departureTimes, arrivalTimes,
                     unassignedPassengers);
 
@@ -190,14 +193,20 @@ public class ReservationController {
             mv.addObject("selectedDate", date);
             mv.addObject("hotels", hotels);
             mv.addObject("hotelMap", hotelMap);
-            
-            // Calculer l'ordre des tournees et les heures detaillees pour l'affichage
-            Map<String, List<Reservation>> tourOrders = calculerOrdreTournees(filtered, assignments, hotelMap, distanceMatrix, departureTimes, arrivalTimes);
-            Map<String, Map<String, java.sql.Timestamp>> detailedTimes = calculerHorairesDetailles(filtered, assignments, hotelMap, distanceMatrix, currentParam, departureTimes, arrivalTimes);
-            Map<String, BigDecimal> tourDistancesKm = calculerDistancesTournees(filtered, assignments, hotelMap, distanceMatrix, departureTimes, arrivalTimes, tourOrders);
+
+                SlotVehiculeData slotData = construireSlotsVehicule(filtered, assignmentChunksByReservation);
+
+                // Calculer l'ordre des tournees et les heures detaillees pour l'affichage
+                Map<String, List<Reservation>> tourOrders = calculerOrdreTournees(slotData.slotToResa, hotelMap, distanceMatrix);
+                Map<String, Map<String, java.sql.Timestamp>> detailedTimes = calculerHorairesDetailles(tourOrders, hotelMap,
+                    distanceMatrix, currentParam);
+                Map<String, BigDecimal> tourDistancesKm = calculerDistancesTournees(slotData.slotToResa, hotelMap,
+                    distanceMatrix, tourOrders);
 
             sauvegarderTrajetsEtCompteurs(conn, filtered, assignmentChunksByReservation, departureTimes, arrivalTimes);
 
+                mv.addObject("slotToResa", slotData.slotToResa);
+                mv.addObject("slotToAssignedPax", slotData.slotToAssignedPax);
             mv.addObject("tourOrders", tourOrders);
             mv.addObject("detailedTimes", detailedTimes);
             mv.addObject("tourDistancesKm", tourDistancesKm);
@@ -748,9 +757,11 @@ public class ReservationController {
         private final int tripCount;
         private final int fuelPriority;
         private final boolean vehiculePartiel;
+        private final boolean reservationDejaEntamee;
 
         private AffectationCandidate(Vehicule vehicule, Reservation reservation, int passagers,
-                int categorie, int ecart, int fragmentation, int tripCount, int fuelPriority, boolean vehiculePartiel) {
+                int categorie, int ecart, int fragmentation, int tripCount, int fuelPriority,
+                boolean vehiculePartiel, boolean reservationDejaEntamee) {
             this.vehicule = vehicule;
             this.reservation = reservation;
             this.passagers = passagers;
@@ -760,6 +771,7 @@ public class ReservationController {
             this.tripCount = tripCount;
             this.fuelPriority = fuelPriority;
             this.vehiculePartiel = vehiculePartiel;
+            this.reservationDejaEntamee = reservationDejaEntamee;
         }
     }
 
@@ -768,6 +780,7 @@ public class ReservationController {
             Map<Vehicule, Integer> dailyTripCount, Map<String, TypeCarburant> typeById,
             Map<Reservation, Set<String>> vehiculesParReservation) {
         AffectationCandidate best = null;
+        int activeReservations = compterReservationsActives(group, remainingDemand);
 
         for (Vehicule v : vehiculesDisponibles) {
             int cap = placesRestantes.getOrDefault(v, 0);
@@ -790,9 +803,15 @@ public class ReservationController {
                 int categorie = demand <= cap ? 0 : 1;
                 int ecart = Math.abs(cap - demand);
                 int fragmentation = vehiculesParReservation.getOrDefault(r, Collections.emptySet()).size();
+                boolean reservationDejaEntamee = fragmentation > 0;
+
+                // Evite de splitter immediatement une unique reservation sur plusieurs vehicules vides.
+                if (activeReservations == 1 && reservationDejaEntamee && !isPartiel) {
+                    continue;
+                }
 
                 AffectationCandidate candidate = new AffectationCandidate(v, r, affectes, categorie, ecart,
-                        fragmentation, trip, fuel, isPartiel);
+                        fragmentation, trip, fuel, isPartiel, reservationDejaEntamee);
                 if (estMeilleureAffectation(candidate, best)) {
                     best = candidate;
                 }
@@ -825,6 +844,19 @@ public class ReservationController {
                 return candidate.passagers > current.passagers;
             }
         } else {
+            // Pour un vehicule vide, on peut prioriser une reservation deja entamee
+            // seulement si elle est plus ancienne que l'alternative non entamee.
+            if (candidate.reservationDejaEntamee != current.reservationDejaEntamee) {
+                if (candidate.reservationDejaEntamee
+                        && reservationPlusAncienneOuEgale(candidate.reservation, current.reservation)) {
+                    return true;
+                }
+                if (current.reservationDejaEntamee
+                        && reservationPlusAncienneOuEgale(current.reservation, candidate.reservation)) {
+                    return false;
+                }
+            }
+
             // Un vehicule vide cherche erendre le plus grand groupe possible pour rentabiliser
             if (candidate.passagers != current.passagers) {
                 return candidate.passagers > current.passagers;
@@ -868,6 +900,136 @@ public class ReservationController {
         String idResCandidate = candidate.reservation.getIdReservation() != null ? candidate.reservation.getIdReservation() : "";
         String idResCurrent = current.reservation.getIdReservation() != null ? current.reservation.getIdReservation() : "";
         return idResCandidate.compareToIgnoreCase(idResCurrent) < 0;
+    }
+
+    private int compterReservationsActives(List<Reservation> group, Map<Reservation, Integer> remainingDemand) {
+        if (group == null || remainingDemand == null) {
+            return 0;
+        }
+        int count = 0;
+        for (Reservation r : group) {
+            if (r != null && remainingDemand.getOrDefault(r, 0) > 0) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private boolean reservationPlusAncienneOuEgale(Reservation first, Reservation second) {
+        if (first == null) {
+            return false;
+        }
+        if (second == null) {
+            return true;
+        }
+
+        Timestamp firstDate = first.getDateResa();
+        Timestamp secondDate = second.getDateResa();
+        if (firstDate == null) {
+            return false;
+        }
+        if (secondDate == null) {
+            return true;
+        }
+        return !firstDate.after(secondDate);
+    }
+
+    private static class SlotVehiculeData {
+        private final Map<String, List<Reservation>> slotToResa = new LinkedHashMap<>();
+        private final Map<String, Map<String, Integer>> slotToAssignedPax = new LinkedHashMap<>();
+    }
+
+    private SlotVehiculeData construireSlotsVehicule(List<Reservation> reservations,
+            Map<String, List<AffectationVehicule>> assignmentChunksByReservation) {
+        SlotVehiculeData data = new SlotVehiculeData();
+        if (reservations == null || reservations.isEmpty() || assignmentChunksByReservation == null
+                || assignmentChunksByReservation.isEmpty()) {
+            return data;
+        }
+
+        Map<String, Reservation> reservationById = new HashMap<>();
+        for (Reservation reservation : reservations) {
+            if (reservation != null && reservation.getIdReservation() != null) {
+                reservationById.put(reservation.getIdReservation(), reservation);
+            }
+        }
+
+        java.text.SimpleDateFormat df = new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm");
+        Map<String, Set<String>> slotReservationIds = new HashMap<>();
+
+        for (Map.Entry<String, List<AffectationVehicule>> entry : assignmentChunksByReservation.entrySet()) {
+            String idReservation = entry.getKey();
+            Reservation reservation = reservationById.get(idReservation);
+            if (reservation == null) {
+                continue;
+            }
+
+            List<AffectationVehicule> chunks = entry.getValue();
+            if (chunks == null) {
+                continue;
+            }
+
+            for (AffectationVehicule chunk : chunks) {
+                if (chunk == null || chunk.vehicule == null || chunk.vehicule.getIdVehicule() == null
+                        || chunk.heureDepart == null || chunk.heureRetour == null || chunk.passagers <= 0) {
+                    continue;
+                }
+
+                String key = chunk.vehicule.getIdVehicule() + "|" + df.format(chunk.heureDepart) + "|"
+                        + df.format(chunk.heureRetour);
+
+                Set<String> resaIds = slotReservationIds.computeIfAbsent(key, k -> new LinkedHashSet<>());
+                if (!resaIds.contains(idReservation)) {
+                    data.slotToResa.computeIfAbsent(key, k -> new ArrayList<>()).add(reservation);
+                    resaIds.add(idReservation);
+                }
+
+                Map<String, Integer> paxByReservation = data.slotToAssignedPax.computeIfAbsent(key, k -> new HashMap<>());
+                paxByReservation.put(idReservation, paxByReservation.getOrDefault(idReservation, 0) + chunk.passagers);
+            }
+        }
+
+        return data;
+    }
+
+    private void synchroniserHorairesDepuisChunks(
+            Map<String, List<AffectationVehicule>> assignmentChunksByReservation,
+            Map<String, Timestamp> plannedDepartureTimes,
+            Map<String, Timestamp> departureTimes,
+            Map<String, Timestamp> arrivalTimes) {
+        if (assignmentChunksByReservation == null || assignmentChunksByReservation.isEmpty()) {
+            return;
+        }
+
+        for (Map.Entry<String, List<AffectationVehicule>> entry : assignmentChunksByReservation.entrySet()) {
+            String idReservation = entry.getKey();
+            List<AffectationVehicule> chunks = entry.getValue();
+            if (idReservation == null || chunks == null || chunks.isEmpty()) {
+                continue;
+            }
+
+            Timestamp minDepart = null;
+            Timestamp maxRetour = null;
+            for (AffectationVehicule chunk : chunks) {
+                if (chunk == null) {
+                    continue;
+                }
+                if (chunk.heureDepart != null && (minDepart == null || chunk.heureDepart.before(minDepart))) {
+                    minDepart = chunk.heureDepart;
+                }
+                if (chunk.heureRetour != null && (maxRetour == null || chunk.heureRetour.after(maxRetour))) {
+                    maxRetour = chunk.heureRetour;
+                }
+            }
+
+            if (minDepart != null) {
+                plannedDepartureTimes.put(idReservation, minDepart);
+                departureTimes.put(idReservation, minDepart);
+            }
+            if (maxRetour != null) {
+                arrivalTimes.put(idReservation, maxRetour);
+            }
+        }
     }
 
     private boolean estDansPlageHoraire(LocalTime heure, PlageDisponibilite plage) {
@@ -1605,77 +1767,55 @@ public class ReservationController {
         return null;
     }
 
-    private Map<String, List<Reservation>> calculerOrdreTournees(List<Reservation> reservations, 
-            Map<String, Vehicule> assignments, Map<String, Hotel> hotelMap, 
-            Map<String, Map<String, Distance>> distanceMatrix,
-            Map<String, Timestamp> departureTimes, Map<String, Timestamp> arrivalTimes) {
-        
-        Map<String, List<Reservation>> tourOrders = new HashMap<>();
-        java.text.SimpleDateFormat df = new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm");
-        
-        // Grouper par vehicule et par creneau horaire (en utilisant les heures de depart/arrivee calculees)
-        Map<String, List<Reservation>> vehicleTours = new HashMap<>();
-        for (Reservation r : reservations) {
-            Vehicule v = assignments.get(r.getIdReservation());
-            Timestamp dep = departureTimes.get(r.getIdReservation());
-            Timestamp arr = arrivalTimes.get(r.getIdReservation());
-            
-            if (v != null && dep != null && arr != null) {
-                String depStr = df.format(dep);
-                String arrStr = df.format(arr);
-                String key = v.getIdVehicule() + "|" + depStr + "|" + arrStr;
-                vehicleTours.computeIfAbsent(key, k -> new ArrayList<>()).add(r);
-            }
+    private Map<String, List<Reservation>> calculerOrdreTournees(Map<String, List<Reservation>> slotToResa,
+            Map<String, Hotel> hotelMap,
+            Map<String, Map<String, Distance>> distanceMatrix) {
+
+        Map<String, List<Reservation>> tourOrders = new LinkedHashMap<>();
+        if (slotToResa == null || slotToResa.isEmpty()) {
+            return tourOrders;
         }
-        
-        // Calculer l'ordre pour chaque tournee
-        for (Map.Entry<String, List<Reservation>> entry : vehicleTours.entrySet()) {
-            String key = entry.getKey();
+
+        for (Map.Entry<String, List<Reservation>> entry : slotToResa.entrySet()) {
             List<Reservation> tour = entry.getValue();
-            
+            if (tour == null || tour.isEmpty()) {
+                continue;
+            }
+
             List<Reservation> orderedTour = calculerOrdreOptimal(tour, hotelMap, distanceMatrix);
-            tourOrders.put(key, orderedTour);
+            tourOrders.put(entry.getKey(), orderedTour);
         }
-        
+
         return tourOrders;
     }
 
-    private Map<String, Map<String, java.sql.Timestamp>> calculerHorairesDetailles(List<Reservation> reservations, 
-            Map<String, Vehicule> assignments, Map<String, Hotel> hotelMap, 
-            Map<String, Map<String, Distance>> distanceMatrix, Parametre param,
-            Map<String, Timestamp> departureTimes, Map<String, Timestamp> arrivalTimes) {
-        
-        Map<String, Map<String, java.sql.Timestamp>> detailedTimes = new HashMap<>();
+    private Map<String, Map<String, java.sql.Timestamp>> calculerHorairesDetailles(
+            Map<String, List<Reservation>> tourOrders,
+            Map<String, Hotel> hotelMap,
+            Map<String, Map<String, Distance>> distanceMatrix,
+            Parametre param) {
+
+        Map<String, Map<String, java.sql.Timestamp>> detailedTimes = new LinkedHashMap<>();
+        if (tourOrders == null || tourOrders.isEmpty()) {
+            return detailedTimes;
+        }
+
         java.text.SimpleDateFormat df = new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm");
-        
-        // Grouper les reservations par vehicule et creneau horaire
-        Map<String, List<Reservation>> vehicleTours = new HashMap<>();
-        for (Reservation r : reservations) {
-            Vehicule v = assignments.get(r.getIdReservation());
-            Timestamp dep = departureTimes.get(r.getIdReservation());
-            Timestamp arr = arrivalTimes.get(r.getIdReservation());
-            
-            if (v != null && dep != null && arr != null) {
-                String depStr = df.format(dep);
-                String arrStr = df.format(arr);
-                String key = v.getIdVehicule() + "|" + depStr + "|" + arrStr;
-                vehicleTours.computeIfAbsent(key, k -> new ArrayList<>()).add(r);
-            }
-        }
-        
-        // Calculer les heures detaillees pour chaque tournee
-        for (Map.Entry<String, List<Reservation>> entry : vehicleTours.entrySet()) {
-            String key = entry.getKey();
+        for (Map.Entry<String, List<Reservation>> entry : tourOrders.entrySet()) {
             List<Reservation> tour = entry.getValue();
-            
-            if (!tour.isEmpty()) {
-                // Utiliser l'heure de depart calculee pour cette tournee (depTime)
-                Timestamp depTime = departureTimes.get(tour.get(0).getIdReservation());
-                Map<String, java.sql.Timestamp> times = calculerHeuresTournee(tour, hotelMap, distanceMatrix, param, depTime);
-                detailedTimes.put(key, times);
+            if (tour == null || tour.isEmpty()) {
+                continue;
             }
+
+            Timestamp depTime = extraireHeureDepartDepuisCle(entry.getKey(), df);
+            if (depTime == null) {
+                continue;
+            }
+
+            Map<String, java.sql.Timestamp> times = calculerHeuresTournee(tour, hotelMap, distanceMatrix, param, depTime);
+            detailedTimes.put(entry.getKey(), times);
         }
-        
+
         return detailedTimes;
     }
 
@@ -1692,26 +1832,16 @@ public class ReservationController {
         return times;
     }
 
-    private Map<String, BigDecimal> calculerDistancesTournees(List<Reservation> reservations,
-            Map<String, Vehicule> assignments, Map<String, Hotel> hotelMap,
+    private Map<String, BigDecimal> calculerDistancesTournees(Map<String, List<Reservation>> slotToResa,
+            Map<String, Hotel> hotelMap,
             Map<String, Map<String, Distance>> distanceMatrix,
-            Map<String, Timestamp> departureTimes, Map<String, Timestamp> arrivalTimes,
             Map<String, List<Reservation>> tourOrders) {
         Map<String, BigDecimal> distances = new LinkedHashMap<>();
-        java.text.SimpleDateFormat df = new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm");
-        Map<String, List<Reservation>> vehicleTours = new LinkedHashMap<>();
-
-        for (Reservation r : reservations) {
-            Vehicule v = assignments.get(r.getIdReservation());
-            Timestamp dep = departureTimes.get(r.getIdReservation());
-            Timestamp arr = arrivalTimes.get(r.getIdReservation());
-            if (v != null && dep != null && arr != null) {
-                String key = v.getIdVehicule() + "|" + df.format(dep) + "|" + df.format(arr);
-                vehicleTours.computeIfAbsent(key, k -> new ArrayList<>()).add(r);
-            }
+        if (slotToResa == null || slotToResa.isEmpty()) {
+            return distances;
         }
 
-        for (Map.Entry<String, List<Reservation>> entry : vehicleTours.entrySet()) {
+        for (Map.Entry<String, List<Reservation>> entry : slotToResa.entrySet()) {
             String key = entry.getKey();
             List<Reservation> orderedTour = tourOrders != null && tourOrders.containsKey(key)
                     ? tourOrders.get(key)
@@ -1720,6 +1850,26 @@ public class ReservationController {
         }
 
         return distances;
+    }
+
+    private Timestamp extraireHeureDepartDepuisCle(String key, java.text.SimpleDateFormat df) {
+        if (key == null || df == null) {
+            return null;
+        }
+
+        try {
+            String[] parts = key.split("\\|", 3);
+            if (parts.length < 2) {
+                return null;
+            }
+            java.util.Date parsed = df.parse(parts[1]);
+            if (parsed == null) {
+                return null;
+            }
+            return new Timestamp(parsed.getTime());
+        } catch (Exception ignore) {
+            return null;
+        }
     }
 
     private BigDecimal calculerDistanceParcours(List<Reservation> orderedTour,

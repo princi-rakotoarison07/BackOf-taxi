@@ -29,6 +29,8 @@
     Map<String, Map<String, java.sql.Timestamp>> detailedTimes = (Map<String, Map<String, java.sql.Timestamp>>) request.getAttribute("detailedTimes");
     Map<String, java.math.BigDecimal> tourDistancesKm = (Map<String, java.math.BigDecimal>) request.getAttribute("tourDistancesKm");
     Map<String, List<String>> splitDetails = (Map<String, List<String>>) request.getAttribute("splitDetails");
+    Map<String, List<Reservation>> slotToResa = (Map<String, List<Reservation>>) request.getAttribute("slotToResa");
+    Map<String, Map<String, Integer>> slotToAssignedPax = (Map<String, Map<String, Integer>>) request.getAttribute("slotToAssignedPax");
 
     Map<String, TypeCarburant> typeById = new HashMap<>();
     if (types != null) {
@@ -41,66 +43,95 @@
     }
 
     java.text.SimpleDateFormat df = new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm");
+    java.text.SimpleDateFormat tf = new java.text.SimpleDateFormat("HH:mm:ss");
 
-    // Grouper par véhicule ET par créneau horaire.
-    // Clé: vehicleId + "|" + depTime + "|" + arrTime
-    // On conserve aussi le nb de pax reellement assignes par reservation dans ce vehicule.
-    Map<String, List<Reservation>> slotToResa = new LinkedHashMap<>();
-    Map<String, Map<String, Integer>> slotToAssignedPax = new LinkedHashMap<>();
-    Map<String, Set<String>> slotToResaIds = new HashMap<>();
+    if (slotToResa == null || slotToAssignedPax == null) {
+        // Fallback si les slots pre-calcules ne sont pas fournis.
+        slotToResa = new LinkedHashMap<>();
+        slotToAssignedPax = new LinkedHashMap<>();
+        Map<String, Set<String>> slotToResaIds = new HashMap<>();
 
-    if (reservations != null) {
-        for (Reservation r : reservations) {
-            String resaId = r.getIdReservation();
-            java.sql.Timestamp dep = departureTimes != null ? departureTimes.get(resaId) : null;
-            java.sql.Timestamp arr = arrivalTimes != null ? arrivalTimes.get(resaId) : null;
-            String depStr = dep != null ? df.format(dep) : "-";
-            String arrStr = arr != null ? df.format(arr) : "-";
+        if (reservations != null) {
+            for (Reservation r : reservations) {
+                String resaId = r.getIdReservation();
+                java.sql.Timestamp dep = departureTimes != null ? departureTimes.get(resaId) : null;
+                java.sql.Timestamp arr = arrivalTimes != null ? arrivalTimes.get(resaId) : null;
+                String depStr = dep != null ? df.format(dep) : "-";
+                String arrStr = arr != null ? df.format(arr) : "-";
 
-            List<String> splits = splitDetails != null ? splitDetails.get(resaId) : null;
-            boolean addedFromSplit = false;
-            if (splits != null && !splits.isEmpty()) {
-                for (String split : splits) {
-                    if (split == null || !split.contains(":")) {
-                        continue;
-                    }
-                    String[] parts = split.split(":", 2);
-                    String vehiculeId = parts[0] != null ? parts[0].trim() : "";
-                    int paxAssigned = 0;
-                    try {
-                        paxAssigned = Integer.parseInt(parts[1].trim());
-                    } catch (Exception ignore) {
-                        paxAssigned = 0;
-                    }
-                    if (vehiculeId.isEmpty() || paxAssigned <= 0) {
-                        continue;
-                    }
+                List<String> splits = splitDetails != null ? splitDetails.get(resaId) : null;
+                boolean addedFromSplit = false;
+                if (splits != null && !splits.isEmpty()) {
+                    for (String split : splits) {
+                        if (split == null || !split.contains(":")) {
+                            continue;
+                        }
+                        String[] parts = split.split(":", 2);
+                        String vehiculeId = parts[0] != null ? parts[0].trim() : "";
+                        int paxAssigned = 0;
+                        try {
+                            paxAssigned = Integer.parseInt(parts[1].trim());
+                        } catch (Exception ignore) {
+                            paxAssigned = 0;
+                        }
+                        if (vehiculeId.isEmpty() || paxAssigned <= 0) {
+                            continue;
+                        }
 
-                    String key = vehiculeId + "|" + depStr + "|" + arrStr;
-                    Set<String> resaIds = slotToResaIds.computeIfAbsent(key, k -> new HashSet<>());
-                    if (!resaIds.contains(resaId)) {
-                        slotToResa.computeIfAbsent(key, k -> new ArrayList<>()).add(r);
-                        resaIds.add(resaId);
+                        String key = vehiculeId + "|" + depStr + "|" + arrStr;
+                        Set<String> resaIds = slotToResaIds.computeIfAbsent(key, k -> new HashSet<>());
+                        if (!resaIds.contains(resaId)) {
+                            slotToResa.computeIfAbsent(key, k -> new ArrayList<>()).add(r);
+                            resaIds.add(resaId);
+                        }
+                        slotToAssignedPax.computeIfAbsent(key, k -> new HashMap<>()).put(resaId, paxAssigned);
+                        addedFromSplit = true;
                     }
-                    slotToAssignedPax.computeIfAbsent(key, k -> new HashMap<>()).put(resaId, paxAssigned);
-                    addedFromSplit = true;
                 }
-            }
 
-            if (!addedFromSplit && assignments != null) {
-                Vehicule v = assignments.get(resaId);
-                if (v != null) {
-                    String key = v.getIdVehicule() + "|" + depStr + "|" + arrStr;
-                    Set<String> resaIds = slotToResaIds.computeIfAbsent(key, k -> new HashSet<>());
-                    if (!resaIds.contains(resaId)) {
-                        slotToResa.computeIfAbsent(key, k -> new ArrayList<>()).add(r);
-                        resaIds.add(resaId);
+                if (!addedFromSplit && assignments != null) {
+                    Vehicule v = assignments.get(resaId);
+                    if (v != null) {
+                        String key = v.getIdVehicule() + "|" + depStr + "|" + arrStr;
+                        Set<String> resaIds = slotToResaIds.computeIfAbsent(key, k -> new HashSet<>());
+                        if (!resaIds.contains(resaId)) {
+                            slotToResa.computeIfAbsent(key, k -> new ArrayList<>()).add(r);
+                            resaIds.add(resaId);
+                        }
+                        slotToAssignedPax.computeIfAbsent(key, k -> new HashMap<>())
+                                .put(resaId, r.getNbrPassager() != null ? r.getNbrPassager() : 0);
                     }
-                    slotToAssignedPax.computeIfAbsent(key, k -> new HashMap<>())
-                            .put(resaId, r.getNbrPassager() != null ? r.getNbrPassager() : 0);
                 }
             }
         }
+    }
+
+    List<Map.Entry<String, List<Reservation>>> slotEntries = new ArrayList<>();
+    if (slotToResa != null) {
+        slotEntries.addAll(slotToResa.entrySet());
+        Collections.sort(slotEntries, (e1, e2) -> {
+            String[] p1 = e1.getKey().split("\\|", 3);
+            String[] p2 = e2.getKey().split("\\|", 3);
+
+            java.util.Date d1 = null;
+            java.util.Date d2 = null;
+            try { d1 = p1.length > 1 ? df.parse(p1[1]) : null; } catch (Exception ignore) { d1 = null; }
+            try { d2 = p2.length > 1 ? df.parse(p2[1]) : null; } catch (Exception ignore) { d2 = null; }
+
+            if (d1 != null && d2 != null && d1.getTime() != d2.getTime()) {
+                return Long.compare(d1.getTime(), d2.getTime());
+            }
+            if (d1 == null && d2 != null) {
+                return 1;
+            }
+            if (d1 != null && d2 == null) {
+                return -1;
+            }
+
+            String v1 = p1.length > 0 ? p1[0] : "";
+            String v2 = p2.length > 0 ? p2[0] : "";
+            return v1.compareToIgnoreCase(v2);
+        });
     }
 %>
 <div class="container-fluid">
@@ -151,9 +182,9 @@
                     <tbody>
                         <%
                             boolean hasAssignments = false;
-                            if (!slotToResa.isEmpty()) {
+                            if (slotEntries != null && !slotEntries.isEmpty()) {
                                 hasAssignments = true;
-                                for (Map.Entry<String, List<Reservation>> entry : slotToResa.entrySet()) {
+                                for (Map.Entry<String, List<Reservation>> entry : slotEntries) {
                                     String key = entry.getKey();
                                     List<Reservation> assignedResas = entry.getValue();
                                     String[] parts = key.split("\\|");
@@ -232,6 +263,114 @@
                                     <p class="mb-0">Aucun véhicule n'a de réservation pour cette date.</p>
                                 </div>
                             </td>
+                        </tr>
+                        <% } %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 mt-4">
+        <div class="card-header bg-white py-3 d-flex align-items-center justify-content-between">
+            <h5 class="mb-0 fw-bold">Resultat detaille (format sujet)</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead class="bg-light text-muted">
+                        <tr>
+                            <th>vehicule</th>
+                            <th>client</th>
+                            <th>nb pers</th>
+                            <th>heure depart</th>
+                            <th>heure retour</th>
+                            <th>min duree</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <%
+                            boolean hasDetailedRows = false;
+                            if (slotEntries != null && !slotEntries.isEmpty()) {
+                                for (Map.Entry<String, List<Reservation>> entry : slotEntries) {
+                                    String key = entry.getKey();
+                                    List<Reservation> assignedResas = entry.getValue();
+                                    if (assignedResas == null || assignedResas.isEmpty()) {
+                                        continue;
+                                    }
+
+                                    String[] parts = key.split("\\|", 3);
+                                    String vId = parts.length > 0 ? parts[0] : "-";
+                                    String depStr = parts.length > 1 ? parts[1] : "-";
+                                    String arrStr = parts.length > 2 ? parts[2] : "-";
+
+                                    java.util.Date depDate = null;
+                                    java.util.Date arrDate = null;
+                                    try { depDate = df.parse(depStr); } catch (Exception ignore) { depDate = null; }
+                                    try { arrDate = df.parse(arrStr); } catch (Exception ignore) { arrDate = null; }
+
+                                    String depTimeOnly = depDate != null ? tf.format(depDate) : depStr;
+                                    String arrTimeOnly = arrDate != null ? tf.format(arrDate) : arrStr;
+                                    long durationMin = (depDate != null && arrDate != null) ? (arrDate.getTime() - depDate.getTime()) / 60000L : 0L;
+
+                                    List<Reservation> detailRows = new ArrayList<>(assignedResas);
+                                        final Map<String, Integer> paxByRes = slotToAssignedPax != null ? slotToAssignedPax.get(key) : null;
+                                    Collections.sort(detailRows, (a, b) -> {
+                                        int paxA = (paxByRes != null && paxByRes.containsKey(a.getIdReservation()))
+                                            ? paxByRes.get(a.getIdReservation())
+                                                : (a.getNbrPassager() != null ? a.getNbrPassager() : 0);
+                                        int paxB = (paxByRes != null && paxByRes.containsKey(b.getIdReservation()))
+                                            ? paxByRes.get(b.getIdReservation())
+                                                : (b.getNbrPassager() != null ? b.getNbrPassager() : 0);
+
+                                        if (paxA != paxB) {
+                                            return Integer.compare(paxB, paxA);
+                                        }
+                                        String idA = a.getIdReservation() != null ? a.getIdReservation() : "";
+                                        String idB = b.getIdReservation() != null ? b.getIdReservation() : "";
+                                        return idA.compareToIgnoreCase(idB);
+                                    });
+
+                                    for (Reservation currentResa : detailRows) {
+                                        int paxAssigned = currentResa.getNbrPassager() != null ? currentResa.getNbrPassager() : 0;
+                                        if (slotToAssignedPax != null && slotToAssignedPax.containsKey(key)
+                                                && slotToAssignedPax.get(key).containsKey(currentResa.getIdReservation())) {
+                                            paxAssigned = slotToAssignedPax.get(key).get(currentResa.getIdReservation());
+                                        }
+                                        if (paxAssigned <= 0) {
+                                            continue;
+                                        }
+
+                                        String clientRaw = currentResa.getIdClient();
+                                        String clientLabel = clientRaw != null ? clientRaw : "-";
+                                        if (clientRaw != null) {
+                                            String digits = clientRaw.replaceAll("\\\\D+", "");
+                                            if (!digits.isEmpty()) {
+                                                try {
+                                                    clientLabel = "Client" + Integer.parseInt(digits);
+                                                } catch (Exception ignore) {
+                                                    clientLabel = clientRaw;
+                                                }
+                                            }
+                                        }
+                                        hasDetailedRows = true;
+                        %>
+                        <tr class="bg-white">
+                            <td><%= vId %></td>
+                            <td><%= clientLabel %></td>
+                            <td><%= paxAssigned %></td>
+                            <td><%= depTimeOnly %></td>
+                            <td><%= arrTimeOnly %></td>
+                            <td><%= durationMin %></td>
+                        </tr>
+                        <%
+                                    }
+                                }
+                            }
+                            if (!hasDetailedRows) {
+                        %>
+                        <tr>
+                            <td colspan="6" class="text-center py-4 text-muted">Aucune ligne detaillee disponible.</td>
                         </tr>
                         <% } %>
                     </tbody>
