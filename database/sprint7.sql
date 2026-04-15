@@ -20,11 +20,11 @@ INSERT INTO distance (id_distance, lieu_from, lieu_to, kilometre) VALUES
 ('DIST_S7_2', 'LIEU001', 'LIEU_S7_2', 35),
 ('DIST_S7_3', 'LIEU_S7_1', 'LIEU_S7_2', 60);
 INSERT INTO vehicule (id_vehicule, reference, nbr_place, id_type_carburant, heure_disponible) VALUES
-('VH_S7_1', 'vehicule1', 5,  'TC0001', '2026-03-19 09:00:00'),
-('VH_S7_2', 'vehicule2', 5,  'TC0002', '2026-03-19 09:00:00'),
-('VH_S7_3', 'vehicule3', 12, 'TC0001', '2026-03-19 00:00:00'),
-('VH_S7_4', 'vehicule4', 9,  'TC0001', '2026-03-19 09:00:00'),
-('VH_S7_5', 'vehicule5', 12, 'TC0002', '2026-03-19 13:00:00');
+('VH_S7_1', 'vehicule1', 5,  'TC0001', '09:00:00'),
+('VH_S7_2', 'vehicule2', 5,  'TC0002', '09:00:00'),
+('VH_S7_3', 'vehicule3', 12, 'TC0001', '00:00:00'),
+('VH_S7_4', 'vehicule4', 9,  'TC0001', '09:00:00'),
+('VH_S7_5', 'vehicule5', 12, 'TC0002', '13:00:00');
 
 
 INSERT INTO reservation (id_reservation, id_client, nbr_passager, id_hotel, date_resa) VALUES

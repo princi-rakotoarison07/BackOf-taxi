@@ -547,6 +547,25 @@ public class ReservationController {
         return best;
     }
 
+    private String resolveDatePrefix(String selectedDate, List<Reservation> reservations) {
+        if (selectedDate != null && !selectedDate.isEmpty()) {
+            return selectedDate;
+        }
+        if (reservations != null && !reservations.isEmpty()) {
+            Timestamp min = null;
+            for (Reservation r : reservations) {
+                if (r == null || r.getDateResa() == null) continue;
+                if (min == null || r.getDateResa().before(min)) {
+                    min = r.getDateResa();
+                }
+            }
+            if (min != null) {
+                return new java.sql.Date(min.getTime()).toString();
+            }
+        }
+        return new java.sql.Date(System.currentTimeMillis()).toString();
+    }
+
     @PostMapping("/BackOf-taxi/reservation/save-assignation")
     public Map<String, Object> saveAssignation(@ModelAttribute Assignation assignation) {
         Map<String, Object> result = new HashMap<>();
@@ -645,7 +664,7 @@ public class ReservationController {
             Map<String, Map<String, Distance>> distanceMatrix = construireMatriceDistance(distances);
 
         AssignationView view = assignerVehiculesGenererPortions(filtered, vehicules, typeById, hotelMap,
-                distanceMatrix, currentParam);
+                distanceMatrix, currentParam, date);
         Map<String, Vehicule> assignments = view.getAssignments();
         List<Reservation> viewReservations = view.getReservations();
         List<Reservation> unassigned = new ArrayList<>();
@@ -751,7 +770,11 @@ public class ReservationController {
 
         Map<Vehicule, Timestamp> nextFreeTime = new HashMap<>();
         for (Vehicule v : available) {
-            Timestamp init = v.getHeureDisponible() != null ? v.getHeureDisponible() : new Timestamp(0);
+            Timestamp init = new Timestamp(0);
+            if (v.getHeureDisponible() != null) {
+                String datePrefix = resolveDatePrefix(null, reservations);
+                init = Timestamp.valueOf(datePrefix + " " + v.getHeureDisponible().toString());
+            }
             nextFreeTime.put(v, init);
         }
 
@@ -853,248 +876,408 @@ public class ReservationController {
         return assignments;
     }
 
+    class VehicleState {
+        Vehicule v;
+        Timestamp availableTime;
+        boolean isFirstCourse = true;
+        boolean isWaiting = false;
+        int remainingCap = 0;
+        List<ReservationPortion> loadedPortions = new ArrayList<>();
+        Timestamp departureTime = null;
+        int trips = 0;
+    }
+
+    private PendingReservation choisirMeilleureReservation(List<PendingReservation> pending, int remainingCap,
+            Timestamp maxAcceptedDate) {
+        if (pending == null || pending.isEmpty() || remainingCap <= 0) {
+            return null;
+        }
+
+        PendingReservation best = null;
+        boolean hasPriority = false;
+        for (PendingReservation p : pending) {
+            if (p == null) continue;
+            if (maxAcceptedDate != null && (p.reservation == null || p.reservation.getDateResa() == null
+                    || p.reservation.getDateResa().after(maxAcceptedDate))) {
+                continue;
+            }
+            if (p.remainder) {
+                hasPriority = true;
+                break;
+            }
+        }
+
+        int bestEmptySeats = Integer.MAX_VALUE;
+        int bestLeftover = Integer.MAX_VALUE;
+        Timestamp bestDate = null;
+
+        for (PendingReservation pr : pending) {
+            if (pr == null || pr.reservation == null) continue;
+            if (pr.remaining <= 0) continue;
+            if (maxAcceptedDate != null && (pr.reservation.getDateResa() == null
+                    || pr.reservation.getDateResa().after(maxAcceptedDate))) {
+                continue;
+            }
+
+            if (hasPriority && !pr.remainder) {
+                continue;
+            }
+
+            int taken = Math.min(remainingCap, pr.remaining);
+            int emptySeats = remainingCap - taken;
+            int leftover = pr.remaining - taken;
+            Timestamp d = pr.reservation.getDateResa();
+
+            boolean better = false;
+            if (emptySeats < bestEmptySeats) {
+                better = true;
+            } else if (emptySeats == bestEmptySeats) {
+                if (leftover < bestLeftover) {
+                    better = true;
+                } else if (leftover == bestLeftover) {
+                    if (bestDate == null) {
+                        better = true;
+                    } else if (d != null && d.before(bestDate)) {
+                        better = true;
+                    }
+                }
+            }
+
+            if (better) {
+                best = pr;
+                bestEmptySeats = emptySeats;
+                bestLeftover = leftover;
+                bestDate = d;
+            }
+        }
+
+        return best;
+    }
+
     private AssignationView assignerVehiculesGenererPortions(List<Reservation> reservations, List<Vehicule> vehicules,
             Map<String, TypeCarburant> typeById, Map<String, Hotel> hotelMap,
-            Map<String, Map<String, Distance>> distanceMatrix, Parametre param) {
+            Map<String, Map<String, Distance>> distanceMatrix, Parametre param, String selectedDate) {
+        
         Map<String, Vehicule> assignments = new HashMap<>();
         List<Reservation> outReservations = new ArrayList<>();
-        List<Vehicule> available = new ArrayList<>(vehicules);
-        Map<Vehicule, Integer> tripCount = new HashMap<>();
-        for (Vehicule v : available) {
-            tripCount.put(v, 0);
-        }
+        
         List<PendingReservation> future = new ArrayList<>();
         for (Reservation r : reservations) {
-            if (r.getDateResa() == null)
-                continue;
-            future.add(new PendingReservation(r));
+            if (r.getDateResa() != null) future.add(new PendingReservation(r));
         }
-        future.sort((a, b) -> {
-            Timestamp ta = a.reservation.getDateResa();
-            Timestamp tb = b.reservation.getDateResa();
-            if (ta == null)
-                return 1;
-            if (tb == null)
-                return -1;
-            return ta.compareTo(tb);
-        });
-        Map<Vehicule, Timestamp> nextFreeTime = new HashMap<>();
-        for (Vehicule v : available) {
-            Timestamp init = v.getHeureDisponible() != null ? v.getHeureDisponible() : new Timestamp(0);
-            nextFreeTime.put(v, init);
-        }
+        future.sort((a, b) -> a.reservation.getDateResa().compareTo(b.reservation.getDateResa()));
+        
         List<PendingReservation> pending = new ArrayList<>();
-        int seq = 1;
-        Timestamp currentTime = null;
-        while (!pending.isEmpty() || !future.isEmpty()) {
-            if (currentTime == null) {
-                currentTime = future.get(0).reservation.getDateResa();
+
+        String datePrefix = resolveDatePrefix(selectedDate, reservations);
+        
+        List<VehicleState> states = new ArrayList<>();
+        for (Vehicule v : vehicules) {
+            VehicleState vs = new VehicleState();
+            vs.v = v;
+            if (v.getHeureDisponible() != null) {
+                String timeStr = v.getHeureDisponible().toString();
+                vs.availableTime = Timestamp.valueOf(datePrefix + " " + timeStr);
+            } else {
+                vs.availableTime = Timestamp.valueOf(datePrefix + " 00:00:00");
             }
+            vs.remainingCap = v.getNbrPlace() != null ? v.getNbrPlace() : 0;
+            states.add(vs);
+        }
+        
+        int seq = 1;
+        int tempsAttente = param != null && param.getTempsAttente() != null ? param.getTempsAttente() : 30;
+        
+        while (true) {
+            Timestamp nextTime = null;
+            if (!future.isEmpty()) {
+                nextTime = future.get(0).reservation.getDateResa();
+            }
+            for (VehicleState vs : states) {
+                if (vs.availableTime != null) {
+                    if (nextTime == null || vs.availableTime.before(nextTime)) {
+                        nextTime = vs.availableTime;
+                    }
+                }
+            }
+            
+            if (nextTime == null) break;
+            if (nextTime.getTime() > Timestamp.valueOf("2099-01-01 00:00:00").getTime()) break;
+            
+            Timestamp currentTime = nextTime;
+            
             while (!future.isEmpty() && !future.get(0).reservation.getDateResa().after(currentTime)) {
                 pending.add(future.remove(0));
             }
-            List<Vehicule> waveVehicles = new ArrayList<>();
-            for (Vehicule v : available) {
-                Timestamp free = nextFreeTime.getOrDefault(v, new Timestamp(0));
-                if (!free.after(currentTime)) {
-                    waveVehicles.add(v);
+            
+            pending.sort((a, b) -> {
+                if (a.remainder != b.remainder) return a.remainder ? -1 : 1;
+                return a.reservation.getDateResa().compareTo(b.reservation.getDateResa());
+            });
+
+            // Pendant l'attente (avant l'heure limite), un véhicule peut charger des réservations qui viennent
+            // d'arriver et partir immédiatement s'il devient plein.
+            for (VehicleState vs : states) {
+                if (!vs.isWaiting) continue;
+                if (vs.departureTime == null) continue;
+                if (!currentTime.before(vs.departureTime)) continue;
+                if (vs.remainingCap <= 0) continue;
+                if (pending.isEmpty()) continue;
+
+                while (vs.remainingCap > 0) {
+                    PendingReservation best = choisirMeilleureReservation(pending, vs.remainingCap, currentTime);
+                    if (best == null) break;
+                    int pris = Math.min(vs.remainingCap, best.remaining);
+                    vs.loadedPortions.add(new ReservationPortion(best.reservation, pris));
+                    vs.remainingCap -= pris;
+                    best.remaining -= pris;
+                    if (best.remaining <= 0) pending.remove(best);
+                    else best.remainder = true;
                 }
-            }
-            if (waveVehicles.isEmpty()) {
-                Timestamp minFree = null;
-                for (Vehicule v : available) {
-                    Timestamp free = nextFreeTime.getOrDefault(v, new Timestamp(0));
-                    if (minFree == null || free.before(minFree)) {
-                        minFree = free;
+
+                if (vs.remainingCap <= 0) {
+                    // Plein avant la limite -> départ immédiat
+                    vs.isWaiting = false;
+                    vs.isFirstCourse = false;
+                    List<Reservation> tour = new ArrayList<>();
+                    Timestamp depTime = currentTime;
+                    for (ReservationPortion rp : vs.loadedPortions) {
+                        Reservation clone = new Reservation();
+                        clone.setIdReservation(rp.reservation.getIdReservation() + "#" + (seq++));
+                        clone.setIdClient(rp.reservation.getIdClient());
+                        clone.setNbrPassager(rp.placesAssignees);
+                        clone.setIdHotel(rp.reservation.getIdHotel());
+                        clone.setDateResa(depTime);
+                        outReservations.add(clone);
+                        assignments.put(clone.getIdReservation(), vs.v);
+                        tour.add(clone);
                     }
+                    long durationMs = calculerDureeTournee(tour, hotelMap, distanceMatrix, param);
+                    if (durationMs <= 0) durationMs = 60000L;
+                    vs.availableTime = new Timestamp(depTime.getTime() + durationMs);
+                    vs.loadedPortions.clear();
+                    vs.departureTime = null;
+                    vs.trips++;
                 }
-                if (minFree == null)
-                    break;
-                currentTime = minFree;
-                continue;
             }
-            waveVehicles.sort((v1, v2) -> {
+            
+            List<VehicleState> readyVehicles = new ArrayList<>();
+            for (VehicleState vs : states) {
+                if (vs.availableTime != null && !vs.availableTime.after(currentTime)) {
+                    readyVehicles.add(vs);
+                }
+            }
+            
+            if (readyVehicles.isEmpty()) continue;
+            
+            readyVehicles.sort((vs1, vs2) -> {
+                Vehicule v1 = vs1.v; Vehicule v2 = vs2.v;
                 int cap1 = v1.getNbrPlace() != null ? v1.getNbrPlace() : 0;
                 int cap2 = v2.getNbrPlace() != null ? v2.getNbrPlace() : 0;
-                boolean big1 = cap1 >= 10;
-                boolean big2 = cap2 >= 10;
-                if (big1 != big2)
-                    return Boolean.compare(big2, big1);
-                if (cap1 != cap2)
-                    return Integer.compare(cap2, cap1);
-                int trips1 = tripCount.getOrDefault(v1, 0);
-                int trips2 = tripCount.getOrDefault(v2, 0);
-                if (trips1 != trips2)
-                    return Integer.compare(trips1, trips2);
+                boolean big1 = cap1 >= 10; boolean big2 = cap2 >= 10;
+                if (big1 != big2) return Boolean.compare(big2, big1);
+                if (cap1 != cap2) return Integer.compare(cap2, cap1);
+                if (vs1.trips != vs2.trips) return Integer.compare(vs1.trips, vs2.trips);
                 TypeCarburant tCarb1 = typeById != null ? typeById.get(v1.getIdTypeCarburant()) : null;
                 TypeCarburant tCarb2 = typeById != null ? typeById.get(v2.getIdTypeCarburant()) : null;
                 int diesel1 = (tCarb1 != null && tCarb1.getCode() != null && tCarb1.getCode().equalsIgnoreCase("D")) ? 1 : 0;
                 int diesel2 = (tCarb2 != null && tCarb2.getCode() != null && tCarb2.getCode().equalsIgnoreCase("D")) ? 1 : 0;
-                if (diesel1 != diesel2)
-                    return Integer.compare(diesel2, diesel1);
+                if (diesel1 != diesel2) return Integer.compare(diesel2, diesel1);
                 return safe(v1.getIdVehicule()).compareTo(safe(v2.getIdVehicule()));
             });
-            Map<Vehicule, List<Reservation>> assignedToVehicule = new HashMap<>();
-            for (int i = 0; i < waveVehicles.size(); i++) {
-                Vehicule v = waveVehicles.get(i);
-                int cap = v.getNbrPlace() != null ? v.getNbrPlace() : 0;
-                if (cap <= 0)
-                    continue;
-                int maxRemaining = 0;
-                for (PendingReservation pr : pending) {
-                    if (pr.remaining > maxRemaining) {
-                        maxRemaining = pr.remaining;
+            
+            for (VehicleState vs : readyVehicles) {
+                if (vs.isWaiting) {
+                    // Si des réservations viennent d'arriver pendant l'attente, on part immédiatement à l'heure
+                    // courante (au lieu d'attendre jusqu'à la limite).
+                    if (vs.departureTime != null && currentTime.before(vs.departureTime) && vs.loadedPortions != null
+                            && !vs.loadedPortions.isEmpty()) {
+                        vs.isWaiting = false;
+                        vs.isFirstCourse = false;
+                        List<Reservation> tour = new ArrayList<>();
+                        Timestamp depTime = currentTime;
+                        for (ReservationPortion rp : vs.loadedPortions) {
+                            Reservation clone = new Reservation();
+                            clone.setIdReservation(rp.reservation.getIdReservation() + "#" + (seq++));
+                            clone.setIdClient(rp.reservation.getIdClient());
+                            clone.setNbrPassager(rp.placesAssignees);
+                            clone.setIdHotel(rp.reservation.getIdHotel());
+                            clone.setDateResa(depTime);
+                            outReservations.add(clone);
+                            assignments.put(clone.getIdReservation(), vs.v);
+                            tour.add(clone);
+                        }
+                        long durationMs = calculerDureeTournee(tour, hotelMap, distanceMatrix, param);
+                        if (durationMs <= 0)
+                            durationMs = 60000L;
+                        vs.availableTime = new Timestamp(depTime.getTime() + durationMs);
+                        vs.loadedPortions.clear();
+                        vs.departureTime = null;
+                        vs.trips++;
+                        continue;
                     }
-                }
-                if (cap >= 8 && maxRemaining <= 5) {
-                    boolean hasSmallLater = false;
-                    for (int j = i + 1; j < waveVehicles.size(); j++) {
-                        Vehicule v2 = waveVehicles.get(j);
-                        int cap2 = v2.getNbrPlace() != null ? v2.getNbrPlace() : 0;
-                        if (cap2 > 0 && cap2 < 8) {
-                            hasSmallLater = true;
+
+                    while (vs.remainingCap > 0 && !pending.isEmpty()) {
+                        PendingReservation best = choisirMeilleureReservation(pending, vs.remainingCap, vs.departureTime);
+                        if (best != null) {
+                            int pris = Math.min(vs.remainingCap, best.remaining);
+                            vs.loadedPortions.add(new ReservationPortion(best.reservation, pris));
+                            vs.remainingCap -= pris;
+                            best.remaining -= pris;
+                            if (best.remaining <= 0) pending.remove(best);
+                            else best.remainder = true;
+                        } else {
                             break;
                         }
                     }
-                    if (hasSmallLater) {
-                        continue;
+                    
+                    vs.isWaiting = false;
+                    vs.isFirstCourse = false;
+                    List<Reservation> tour = new ArrayList<>();
+                    Timestamp depTime = vs.departureTime != null ? vs.departureTime : currentTime;
+                    for (ReservationPortion rp : vs.loadedPortions) {
+                        Reservation clone = new Reservation();
+                        clone.setIdReservation(rp.reservation.getIdReservation() + "#" + (seq++));
+                        clone.setIdClient(rp.reservation.getIdClient());
+                        clone.setNbrPassager(rp.placesAssignees);
+                        clone.setIdHotel(rp.reservation.getIdHotel());
+                        clone.setDateResa(depTime);
+                        outReservations.add(clone);
+                        assignments.put(clone.getIdReservation(), vs.v);
+                        tour.add(clone);
                     }
-                }
-                boolean assignedAny = false;
-                String hotelPref = null;
-                while (cap > 0 && !pending.isEmpty()) {
-                    PendingReservation chosen = selectPendingReservation(pending, cap, assignedAny, v, hotelPref);
-                    if (chosen == null)
-                        break;
-                    int pris = Math.min(cap, chosen.remaining);
-                    if (pris <= 0) {
-                        pending.remove(chosen);
-                        continue;
-                    }
-                    Reservation clone = new Reservation();
-                    clone.setIdReservation(chosen.reservation.getIdReservation() + "#" + (seq++));
-                    clone.setIdClient(chosen.reservation.getIdClient());
-                    clone.setNbrPassager(pris);
-                    clone.setIdHotel(chosen.reservation.getIdHotel());
-                    clone.setDateResa(currentTime);
-                    outReservations.add(clone);
-                    assignments.put(clone.getIdReservation(), v);
-                    assignedToVehicule.computeIfAbsent(v, k -> new ArrayList<>()).add(clone);
-                    cap -= pris;
-                    chosen.remaining -= pris;
-                    if (hotelPref == null) {
-                        hotelPref = chosen.reservation.getIdHotel();
-                    }
-                    if (chosen.remaining <= 0) {
-                        pending.remove(chosen);
-                    } else {
-                        chosen.remainder = true;
-                    }
-                    assignedAny = true;
-                }
-            }
-            for (Map.Entry<Vehicule, List<Reservation>> entry : assignedToVehicule.entrySet()) {
-                Vehicule v = entry.getKey();
-                List<Reservation> tour = entry.getValue();
-                long durationMs = calculerDureeTournee(tour, hotelMap, distanceMatrix, param);
-                Timestamp dep = currentTime;
-                Timestamp free = nextFreeTime.getOrDefault(v, new Timestamp(0));
-                if (free != null && free.after(dep)) {
-                    dep = free;
-                }
-                nextFreeTime.put(v, new Timestamp(dep.getTime() + durationMs));
-                tripCount.put(v, tripCount.getOrDefault(v, 0) + 1);
-            }
-            Timestamp nextResTime = !future.isEmpty() ? future.get(0).reservation.getDateResa() : null;
-            Timestamp earliestReturn = null;
-            for (Vehicule v : available) {
-                if (tripCount.getOrDefault(v, 0) <= 0)
-                    continue;
-                Timestamp ft = nextFreeTime.getOrDefault(v, new Timestamp(0));
-                if (earliestReturn == null || ft.before(earliestReturn)) {
-                    earliestReturn = ft;
-                }
-            }
-            if (nextResTime != null && earliestReturn != null) {
-                currentTime = earliestReturn.after(nextResTime) ? earliestReturn : nextResTime;
-            } else if (nextResTime != null) {
-                currentTime = nextResTime;
-            } else {
-                currentTime = earliestReturn;
-            }
-            if (currentTime == null)
-                break;
-        }
-        return new AssignationView(outReservations, assignments);
-    }
+                    long durationMs = calculerDureeTournee(tour, hotelMap, distanceMatrix, param);
+                    if (durationMs <= 0) durationMs = 60000L;
+                    vs.availableTime = new Timestamp(depTime.getTime() + durationMs);
+                    vs.loadedPortions.clear();
+                    vs.departureTime = null;
+                    vs.trips++;
+                } else {
+                    if (pending.isEmpty()) {
+                        if (!vs.isFirstCourse) {
+                            // Aucun passager à l'heure de retour : on ne doit PAS planifier un départ à
+                            // (retour + temps d'attente). Si une réservation arrive dans la fenêtre d'attente,
+                            // on attend jusqu'à cette première arrivée et on part à ce moment.
+                            Timestamp limit = new Timestamp(currentTime.getTime() + tempsAttente * 60000L);
+                            Timestamp nextResaTime = (!future.isEmpty() && future.get(0) != null)
+                                    ? future.get(0).reservation.getDateResa()
+                                    : null;
 
-    private PendingReservation selectPendingReservation(List<PendingReservation> pending, int cap,
-            boolean assignedAny, Vehicule vehicule, String hotelPref) {
-        if (pending == null || pending.isEmpty() || cap <= 0)
-            return null;
-        int vehicleCap = vehicule != null && vehicule.getNbrPlace() != null ? vehicule.getNbrPlace() : 0;
-        boolean big = vehicleCap >= 10;
-        PendingReservation best = null;
-        List<PendingReservation> candidates = new ArrayList<>();
-        if (hotelPref != null) {
-            for (PendingReservation pr : pending) {
-                if (safe(hotelPref).equals(safe(pr.reservation.getIdHotel()))) {
-                    candidates.add(pr);
-                }
-            }
-        }
-        if (candidates.isEmpty()) {
-            candidates.addAll(pending);
-        }
-        if (!assignedAny) {
-            if (vehicleCap >= 8) {
-                for (PendingReservation pr : candidates) {
-                    if (best == null
-                            || pr.remaining > best.remaining
-                            || (pr.remaining == best.remaining
-                                    && pr.reservation.getDateResa().before(best.reservation.getDateResa()))) {
-                        best = pr;
+                            if (nextResaTime != null && !nextResaTime.after(limit)) {
+                                vs.isWaiting = true;
+                                vs.departureTime = limit;
+                                vs.remainingCap = vs.v.getNbrPlace() != null ? vs.v.getNbrPlace() : 0;
+                                vs.loadedPortions.clear();
+                                // réveil à la 1ère réservation (départ immédiat à cette heure)
+                                vs.availableTime = nextResaTime;
+                            } else {
+                                // Rien dans la fenêtre : véhicule disponible au prochain événement (prochaine résa)
+                                vs.availableTime = nextResaTime;
+                            }
+                        } else {
+                            if (!future.isEmpty()) vs.availableTime = future.get(0).reservation.getDateResa();
+                            else vs.availableTime = null;
+                        }
+                    } else {
+                        int totalPending = pending.stream().mapToInt(p -> p.remaining).sum();
+                        int cap = vs.v.getNbrPlace() != null ? vs.v.getNbrPlace() : 0;
+                        vs.remainingCap = cap;
+                        
+                        if (totalPending >= cap) {
+                            while (vs.remainingCap > 0 && !pending.isEmpty()) {
+                                PendingReservation best = choisirMeilleureReservation(pending, vs.remainingCap, null);
+                                if (best != null) {
+                                    int pris = Math.min(vs.remainingCap, best.remaining);
+                                    vs.loadedPortions.add(new ReservationPortion(best.reservation, pris));
+                                    vs.remainingCap -= pris;
+                                    best.remaining -= pris;
+                                    if (best.remaining <= 0) pending.remove(best);
+                                    else best.remainder = true;
+                                } else {
+                                    break;
+                                }
+                            }
+                            
+                            vs.isWaiting = false;
+                            vs.isFirstCourse = false;
+                            List<Reservation> tour = new ArrayList<>();
+                            Timestamp depTime = currentTime;
+                            for (ReservationPortion rp : vs.loadedPortions) {
+                                Reservation clone = new Reservation();
+                                clone.setIdReservation(rp.reservation.getIdReservation() + "#" + (seq++));
+                                clone.setIdClient(rp.reservation.getIdClient());
+                                clone.setNbrPassager(rp.placesAssignees);
+                                clone.setIdHotel(rp.reservation.getIdHotel());
+                                clone.setDateResa(depTime);
+                                outReservations.add(clone);
+                                assignments.put(clone.getIdReservation(), vs.v);
+                                tour.add(clone);
+                            }
+                            long durationMs = calculerDureeTournee(tour, hotelMap, distanceMatrix, param);
+                            if (durationMs <= 0) durationMs = 60000L;
+                            vs.availableTime = new Timestamp(depTime.getTime() + durationMs);
+                            vs.loadedPortions.clear();
+                            vs.departureTime = null;
+                            vs.trips++;
+                        } else {
+                            // Vehicule not full, initiate waiting
+                            while (vs.remainingCap > 0 && !pending.isEmpty()) {
+                                PendingReservation best = choisirMeilleureReservation(pending, vs.remainingCap, null);
+                                if (best != null) {
+                                    int pris = Math.min(vs.remainingCap, best.remaining);
+                                    vs.loadedPortions.add(new ReservationPortion(best.reservation, pris));
+                                    vs.remainingCap -= pris;
+                                    best.remaining -= pris;
+                                    if (best.remaining <= 0) pending.remove(best);
+                                    else best.remainder = true;
+                                } else {
+                                    break;
+                                }
+                            }
+
+                            Timestamp limit = new Timestamp(currentTime.getTime() + tempsAttente * 60000L);
+                            Timestamp nextResaTime = (!future.isEmpty() && future.get(0) != null)
+                                    ? future.get(0).reservation.getDateResa()
+                                    : null;
+
+                            // Si aucune réservation ne va arriver avant la limite, on part immédiatement.
+                            if (nextResaTime == null || nextResaTime.after(limit)) {
+                                vs.isWaiting = false;
+                                vs.isFirstCourse = false;
+                                List<Reservation> tour = new ArrayList<>();
+                                Timestamp depTime = currentTime;
+                                for (ReservationPortion rp : vs.loadedPortions) {
+                                    Reservation clone = new Reservation();
+                                    clone.setIdReservation(rp.reservation.getIdReservation() + "#" + (seq++));
+                                    clone.setIdClient(rp.reservation.getIdClient());
+                                    clone.setNbrPassager(rp.placesAssignees);
+                                    clone.setIdHotel(rp.reservation.getIdHotel());
+                                    clone.setDateResa(depTime);
+                                    outReservations.add(clone);
+                                    assignments.put(clone.getIdReservation(), vs.v);
+                                    tour.add(clone);
+                                }
+                                long durationMs = calculerDureeTournee(tour, hotelMap, distanceMatrix, param);
+                                if (durationMs <= 0)
+                                    durationMs = 60000L;
+                                vs.availableTime = new Timestamp(depTime.getTime() + durationMs);
+                                vs.loadedPortions.clear();
+                                vs.departureTime = null;
+                                vs.trips++;
+                            } else {
+                                // Il y a une réservation dans la fenêtre : on attend au plus tard jusqu'à limit,
+                                // mais on se réveille au premier arrivé.
+                                vs.isWaiting = true;
+                                vs.departureTime = limit;
+                                vs.availableTime = nextResaTime;
+                            }
+                        }
                     }
                 }
-                return best;
-            }
-            for (PendingReservation pr : candidates) {
-                if (!pr.remainder)
-                    continue;
-                if (best == null || pr.reservation.getDateResa().before(best.reservation.getDateResa())) {
-                    best = pr;
-                }
-            }
-            if (best != null)
-                return best;
-            for (PendingReservation pr : candidates) {
-                if (best == null
-                        || pr.remaining > best.remaining
-                        || (pr.remaining == best.remaining
-                                && pr.reservation.getDateResa().before(best.reservation.getDateResa()))) {
-                    best = pr;
-                }
-            }
-            return best;
-        }
-        for (PendingReservation pr : candidates) {
-            if (!pr.remainder)
-                continue;
-            if (best == null || pr.reservation.getDateResa().before(best.reservation.getDateResa())) {
-                best = pr;
             }
         }
-        if (best != null)
-            return best;
-        for (PendingReservation pr : candidates) {
-            if (best == null
-                    || pr.remaining < best.remaining
-                    || (pr.remaining == best.remaining
-                            && pr.reservation.getDateResa().before(best.reservation.getDateResa()))) {
-                best = pr;
-            }
-        }
-        return best;
+        
+        return new AssignationView(outReservations, assignments);
     }
 
     private long calculerDureeTourneeSansRetour(List<Reservation> tour, Map<String, Hotel> hotelMap,
@@ -1263,7 +1446,11 @@ public class ReservationController {
 
         Map<Vehicule, Timestamp> nextFreeTime = new HashMap<>();
         for (Vehicule v : tournées.keySet()) {
-            Timestamp init = v.getHeureDisponible() != null ? v.getHeureDisponible() : new Timestamp(0);
+            Timestamp init = new Timestamp(0);
+            if (v.getHeureDisponible() != null) {
+                String datePrefix = resolveDatePrefix(null, reservations);
+                init = Timestamp.valueOf(datePrefix + " " + v.getHeureDisponible().toString());
+            }
             nextFreeTime.put(v, init);
         }
 
