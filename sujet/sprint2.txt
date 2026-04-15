@@ -1,0 +1,4 @@
+Donc le vehicule charge le 7 places , il attend 30 min car il n'est pas plein 
+alors le date depart 10H20, et on applique le règle logique dans le RES1,RES2,RES3 (avant le heure de départ),
+ normalement on choisi  le RES2 (5/7places) car il est plus proche par rapport au place disponible ,
+ donc RES2 a de 2 passager non assigne , Les 2 personnes sont priorités s'il y a de vehicule apres
